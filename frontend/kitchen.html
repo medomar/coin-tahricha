@@ -121,14 +121,24 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
 .offline-msg .msg{font-size:1rem;font-weight:600;margin-bottom:8px}
 .offline-msg .sub{font-size:.82rem;color:var(--muted-2)}
 
-/* Confirm overlay */
-.confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-.confirm-box{background:var(--surface);border-radius:20px;padding:28px 24px;text-align:center;max-width:320px;width:100%;box-shadow:0 8px 30px var(--shadow-strong)}
-.confirm-box p{font-size:1.1rem;font-weight:700;margin-bottom:20px;color:var(--text)}
-.confirm-actions{display:flex;gap:10px}
-.confirm-actions button{flex:1;padding:14px;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer}
-.confirm-actions .btn-yes{background:linear-gradient(135deg,var(--success) 0%,var(--success-2) 100%);color:#fff}
-.confirm-actions .btn-no{background:var(--surface-muted);color:var(--muted)}
+/* Item extras (ingredient modifications) */
+.item-extras{font-size:.75rem;font-style:italic;color:var(--muted);margin-left:30px;padding:1px 0}
+
+/* Done orders section */
+.done-section{margin-top:20px;border-top:2px solid var(--border);padding-top:12px}
+.done-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 4px;user-select:none}
+.done-header h2{font-size:.95rem;font-weight:700;color:var(--muted)}
+.done-header .toggle-icon{font-size:1.1rem;color:var(--muted);transition:transform .2s}
+.done-header .toggle-icon.open{transform:rotate(180deg)}
+.done-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px}
+.done-card{background:var(--surface-muted);border-radius:14px;padding:14px;border-left:5px solid var(--border);opacity:.55;cursor:default}
+.done-card .ticket-num{text-decoration:line-through;color:var(--muted)}
+.done-card .item-name{text-decoration:line-through;color:var(--muted)}
+.done-card .card-total span{color:var(--muted);text-decoration:line-through}
+.done-card .done-time{font-size:.75rem;color:var(--muted-2);font-weight:500}
+@media(min-width:500px){.done-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:900px){.done-grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1200px){.done-grid{grid-template-columns:repeat(4,1fr)}}
 
 /* Screen flash */
 @keyframes flashScreen{
@@ -216,6 +226,13 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
     <div class="icon">&#9888;</div>
     <div class="msg">Serveur non disponible</div>
     <div class="sub">Mode local &#8212; les tickets seront lus depuis localStorage</div>
+  </div>
+  <div class="done-section" id="done-section" style="display:none">
+    <div class="done-header" id="done-header" onclick="window._toggleDoneSection()">
+      <h2>&#10004; Commandes termin&eacute;es (<span id="done-count">0</span>)</h2>
+      <span class="toggle-icon" id="done-toggle">&#9660;</span>
+    </div>
+    <div class="done-grid" id="done-grid" style="display:none"></div>
   </div>
 </div>
 
@@ -396,7 +413,6 @@ function initApp() {
   var soundEnabled = true;
   var darkMode = false;
   var audioCtx = null;
-  var confirmTicketId = null;
   var lastTicketCount = 0;
   var doneTimers = {};
 
@@ -456,7 +472,7 @@ function initApp() {
         return o.status === 'new' || o.status === 'en_preparation' || o.status === 'preparing';
       })
       .sort(function(a, b) {
-        return new Date(a.created_at) - new Date(b.created_at);
+        return new Date(b.created_at) - new Date(a.created_at);
       });
 
     if (!active.length) {
@@ -486,11 +502,15 @@ function initApp() {
         '</div>' +
         '<div class="item-list">' +
           items.map(function(i) {
+            var extrasHtml = '';
+            if (i.extras && i.extras.length) {
+              extrasHtml = '<div class="item-extras">' + i.extras.map(function(e) { return esc(e); }).join(', ') + '</div>';
+            }
             return '<div class="item-row">' +
               '<span class="qty">' + i.quantity + '\u00d7</span>' +
               '<span class="item-name">' + esc(i.name) + '</span>' +
               '<span class="item-price">' + (i.quantity * i.price).toFixed(3) + '</span>' +
-            '</div>';
+            '</div>' + extrasHtml;
           }).join('') +
         '</div>' +
         '<div class="card-total"><span>' + total.toFixed(3) + ' TND</span></div>' +
@@ -517,6 +537,85 @@ function initApp() {
     });
   }
 
+  // ── Done orders list ──
+  var doneOrders = [];
+  var DONE_MAX = 20;
+  var DONE_TTL = 2 * 60 * 60 * 1000; // 2 hours
+  var doneCollapsed = true;
+
+  window._toggleDoneSection = function() {
+    doneCollapsed = !doneCollapsed;
+    document.getElementById('done-grid').style.display = doneCollapsed ? 'none' : 'grid';
+    document.getElementById('done-toggle').classList.toggle('open', !doneCollapsed);
+  };
+
+  function addToDoneList(order) {
+    var entry = JSON.parse(JSON.stringify(order));
+    entry.done_at = new Date().toISOString();
+    // Remove if already present
+    doneOrders = doneOrders.filter(function(d) { return String(d.id) !== String(entry.id); });
+    doneOrders.unshift(entry);
+    if (doneOrders.length > DONE_MAX) doneOrders = doneOrders.slice(0, DONE_MAX);
+    renderDoneSection();
+  }
+
+  function pruneOldDone() {
+    var now = Date.now();
+    doneOrders = doneOrders.filter(function(d) {
+      return now - new Date(d.done_at).getTime() < DONE_TTL;
+    });
+    renderDoneSection();
+  }
+  setInterval(pruneOldDone, 60000);
+
+  function renderDoneSection() {
+    var section = document.getElementById('done-section');
+    var grid = document.getElementById('done-grid');
+    var countEl = document.getElementById('done-count');
+    pruneOldDoneSilent();
+    if (!doneOrders.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+    countEl.textContent = doneOrders.length;
+    grid.innerHTML = doneOrders.map(function(o) {
+      var items = o.items || [];
+      var total = o.total || items.reduce(function(s, i) { return s + i.quantity * i.price; }, 0);
+      var doneTime = new Date(o.done_at);
+      var doneStr = doneTime.getHours().toString().padStart(2,'0') + ':' + doneTime.getMinutes().toString().padStart(2,'0');
+      return '<div class="done-card">' +
+        '<div class="card-top">' +
+          '<div class="ticket-num">#' + o.id + '</div>' +
+          '<div class="card-meta">' +
+            '<span class="done-time">Termin\u00e9e \u00e0 ' + doneStr + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="item-list">' +
+          items.map(function(i) {
+            var extrasHtml = '';
+            if (i.extras && i.extras.length) {
+              extrasHtml = '<div class="item-extras">' + i.extras.map(function(e) { return esc(e); }).join(', ') + '</div>';
+            }
+            return '<div class="item-row">' +
+              '<span class="qty">' + i.quantity + '\u00d7</span>' +
+              '<span class="item-name">' + esc(i.name) + '</span>' +
+              '<span class="item-price">' + (i.quantity * i.price).toFixed(3) + '</span>' +
+            '</div>' + extrasHtml;
+          }).join('') +
+        '</div>' +
+        '<div class="card-total"><span>' + total.toFixed(3) + ' TND</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function pruneOldDoneSilent() {
+    var now = Date.now();
+    doneOrders = doneOrders.filter(function(d) {
+      return now - new Date(d.done_at).getTime() < DONE_TTL;
+    });
+  }
+
   // ── Tap handler ──
   window._kitchenTap = function(ticketId, status) {
     if (status === 'new') {
@@ -525,55 +624,25 @@ function initApp() {
       render();
       showToast('Commande #' + ticketId + ' en cours');
     } else if (status === 'preparing' || status === 'en_preparation') {
-      showConfirm(ticketId);
-    }
-  };
+      // Mark as done immediately with fade-out (no confirm dialog)
+      var card = document.querySelector('.order-card[data-id="' + ticketId + '"]');
+      if (card) card.classList.add('fade-out');
 
-  // ── Confirm dialog ──
-  function showConfirm(ticketId) {
-    confirmTicketId = ticketId;
-    var overlay = document.createElement('div');
-    overlay.className = 'confirm-overlay';
-    overlay.id = 'confirm-overlay';
-    overlay.innerHTML = '<div class="confirm-box">' +
-      '<p>Marquer commande #' + ticketId + ' comme termin\u00e9e ?</p>' +
-      '<div class="confirm-actions">' +
-        '<button class="btn-no" onclick="window._confirmCancel()">Non</button>' +
-        '<button class="btn-yes" onclick="window._confirmDone()">Oui \u2714</button>' +
-      '</div>' +
-    '</div>';
-    document.body.appendChild(overlay);
-  }
+      updateTicketStatus(ticketId, 'done');
 
-  window._confirmCancel = function() {
-    var el = document.getElementById('confirm-overlay');
-    if (el) el.remove();
-    confirmTicketId = null;
-  };
-
-  window._confirmDone = function() {
-    var el = document.getElementById('confirm-overlay');
-    if (el) el.remove();
-    if (!confirmTicketId) return;
-
-    var card = document.querySelector('.order-card[data-id="' + confirmTicketId + '"]');
-    if (card) card.classList.add('fade-out');
-
-    var id = confirmTicketId;
-    confirmTicketId = null;
-
-    updateTicketStatus(id, 'done');
-
-    setTimeout(function() {
-      if (orders[id]) orders[id].status = 'done';
-      showToast('Commande #' + id + ' termin\u00e9e !');
-      render();
-      doneTimers[id] = setTimeout(function() {
-        delete orders[id];
-        delete doneTimers[id];
+      setTimeout(function() {
+        if (orders[ticketId]) {
+          addToDoneList(orders[ticketId]);
+          orders[ticketId].status = 'done';
+        }
+        showToast('Commande #' + ticketId + ' termin\u00e9e !');
         render();
-      }, 30000);
-    }, 400);
+        doneTimers[ticketId] = setTimeout(function() {
+          delete orders[ticketId];
+          delete doneTimers[ticketId];
+        }, 30000);
+      }, 400);
+    }
   };
 
   // ── Toast ──

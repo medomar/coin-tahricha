@@ -90,6 +90,23 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .ticket-item{padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;font-size:.8rem}
 .ticket-date{color:var(--text-light);font-size:.75rem}
 .ticket-total{font-weight:700;color:var(--accent)}
+.ticket-actions{display:flex;gap:6px;margin-top:6px}
+.ticket-actions button{padding:4px 10px;font-size:.7rem;border-radius:6px;border:none;cursor:pointer;font-weight:600}
+.ticket-actions .btn-edit{background:var(--blue);color:#fff}
+.ticket-actions .btn-del{background:var(--red);color:#fff}
+.ticket-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600;color:#fff;margin-left:6px}
+.ticket-status.new{background:var(--blue)}
+.ticket-status.preparing{background:var(--accent)}
+.ticket-status.done{background:var(--green)}
+.ticket-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.ticket-filter-row select,.ticket-filter-row input{margin-bottom:0;flex:1;min-width:120px}
+.ticket-summary{display:flex;gap:16px;padding:10px 0;font-size:.85rem;font-weight:600;flex-wrap:wrap}
+.ticket-summary span{color:var(--accent)}
+.sort-btn{padding:4px 10px;font-size:.7rem;border:1px solid var(--border);border-radius:6px;background:var(--card);cursor:pointer;font-weight:500}
+.sort-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Ingredients */
+.ingredient-tag{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:4px 10px;font-size:.8rem;margin:3px}
+.ingredient-tag button{background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;font-weight:700;line-height:1;padding:0 2px}
 /* Settings */
 .setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap}
 .setting-row:last-child{border:none}
@@ -180,10 +197,16 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
   </button>
   <div class="stats-grid" id="stats-grid"></div>
   <div class="card">
-    <h3>Filtrer par date</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <input type="date" id="date-from" style="flex:1;min-width:130px">
-      <input type="date" id="date-to" style="flex:1;min-width:130px">
+    <h3>Filtrer</h3>
+    <div class="ticket-filter-row">
+      <input type="date" id="date-from" style="min-width:130px">
+      <input type="date" id="date-to" style="min-width:130px">
+      <select id="status-filter" style="min-width:120px">
+        <option value="">Tous</option>
+        <option value="new">Nouveau</option>
+        <option value="preparing">En cours</option>
+        <option value="done">Termine</option>
+      </select>
       <button class="btn btn-primary btn-sm" onclick="filterSales()">Filtrer</button>
       <button class="btn btn-outline btn-sm" onclick="clearFilter()">Effacer</button>
     </div>
@@ -193,7 +216,12 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     <div id="top-products"></div>
   </div>
   <div class="card">
-    <h3>Tickets</h3>
+    <h3>Tickets
+      <span style="font-weight:400;font-size:.75rem;margin-left:8px">Trier par:</span>
+      <button class="sort-btn active" id="sort-date" onclick="setSortTickets('date')">Date</button>
+      <button class="sort-btn" id="sort-total" onclick="setSortTickets('total')">Total</button>
+    </h3>
+    <div class="ticket-summary" id="ticket-summary"></div>
     <div id="tickets-list"></div>
   </div>
   <div class="card">
@@ -251,6 +279,15 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     <button class="btn btn-primary btn-sm" onclick="importBackup()">Importer</button>
   </div>
   <div class="card">
+    <h3>Ingredients sandwiches</h3>
+    <p style="font-size:.8rem;color:var(--text-light);margin-bottom:8px">Liste des ingredients disponibles pour la caisse (sandwiches).</p>
+    <div id="ingredients-list" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="new-ingredient" placeholder="Nouvel ingredient" style="flex:1;margin:0">
+      <button class="btn btn-primary btn-sm" onclick="addIngredient()">Ajouter</button>
+    </div>
+  </div>
+  <div class="card">
     <h3>Reinitialiser</h3>
     <button class="btn btn-red" onclick="resetProducts()">Remettre les produits par defaut</button>
   </div>
@@ -294,6 +331,35 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-delete')">Annuler</button>
       <button class="btn btn-red" id="modal-delete-btn">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Ticket Modal -->
+<div class="modal-overlay hidden" id="modal-delete-ticket">
+  <div class="modal-box">
+    <h3>Supprimer le ticket</h3>
+    <p id="modal-delete-ticket-msg"></p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-delete-ticket')">Annuler</button>
+      <button class="btn btn-red" id="modal-delete-ticket-btn">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Ticket Status Modal -->
+<div class="modal-overlay hidden" id="modal-edit-ticket">
+  <div class="modal-box">
+    <h3>Modifier le statut</h3>
+    <p id="modal-edit-ticket-msg" style="margin-bottom:8px"></p>
+    <select id="modal-edit-ticket-status" style="margin-bottom:0">
+      <option value="new">Nouveau</option>
+      <option value="preparing">En cours</option>
+      <option value="done">Termine</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-ticket')">Annuler</button>
+      <button class="btn btn-primary" id="modal-edit-ticket-btn">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -509,7 +575,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     fab.style.display=btn.dataset.tab==='tab-products'?'flex':'none';
     if(btn.dataset.tab==='tab-sales')renderSales();
     if(btn.dataset.tab==='tab-categories')renderCategories();
-    if(btn.dataset.tab==='tab-settings')renderPinFields();
+    if(btn.dataset.tab==='tab-settings'){renderPinFields();renderIngredients()}
   });
 });
 
@@ -731,6 +797,28 @@ async function deleteCategory(cat,count){
 }
 
 // ===== Sales Tab =====
+let ticketSortBy='date'; // 'date' or 'total'
+let ticketSortDir=-1; // -1 = descending
+
+function setSortTickets(field){
+  if(ticketSortBy===field){ticketSortDir*=-1}
+  else{ticketSortBy=field;ticketSortDir=-1}
+  document.getElementById('sort-date').classList.toggle('active',ticketSortBy==='date');
+  document.getElementById('sort-total').classList.toggle('active',ticketSortBy==='total');
+  renderSales();
+}
+
+function statusLabel(s){
+  if(s==='preparing') return 'En cours';
+  if(s==='done') return 'Termine';
+  return 'Nouveau';
+}
+function statusClass(s){
+  if(s==='preparing') return 'preparing';
+  if(s==='done') return 'done';
+  return 'new';
+}
+
 function renderSales(){
   const tix=filteredTickets||tickets;
   // Stats
@@ -752,27 +840,88 @@ function renderSales(){
   tix.forEach(t=>(t.items||[]).forEach(it=>{prodCount[it.name]=(prodCount[it.name]||0)+(it.qty||it.quantity||1)}));
   const top=Object.entries(prodCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
   document.getElementById('top-products').innerHTML=top.length?top.map((t,i)=>`<div class="rank-item"><span><span class="rank-num">#${i+1}</span>${t[0]}</span><span>${t[1]}</span></div>`).join(''):'<p style="color:var(--text-light)">Aucune vente</p>';
-  // Tickets
-  const sorted=[...tix].sort((a,b)=>((b.date||b.timestamp||'')>(a.date||a.timestamp||'')?1:-1));
+  // Ticket summary
+  document.getElementById('ticket-summary').innerHTML=`<div>${count} ticket${count>1?'s':''} | Total: <span>${totalTND.toFixed(3)} TND</span></div>`;
+  // Tickets sorted
+  const sorted=[...tix].sort((a,b)=>{
+    if(ticketSortBy==='total'){return ticketSortDir*((a.total||0)-(b.total||0))}
+    const da=a.date||a.timestamp||'';const db=b.date||b.timestamp||'';
+    return ticketSortDir*(da>db?1:da<db?-1:0);
+  });
   document.getElementById('tickets-list').innerHTML=sorted.slice(0,50).map(t=>{
     const d=t.date||t.timestamp||'';
     const items=(t.items||[]).map(i=>`${i.name} x${i.qty||i.quantity||1}`).join(', ');
-    return `<div class="ticket-item"><div class="ticket-date">${d}</div><div class="ticket-total">${(t.total||0).toFixed(3)} TND</div><div>${items||'--'}</div></div>`;
+    const st=t.status||'new';
+    const tid=t.id||'';
+    return `<div class="ticket-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
+        <span class="ticket-date">${d} ${tid?'#'+tid:''}</span>
+        <span class="ticket-status ${statusClass(st)}">${statusLabel(st)}</span>
+      </div>
+      <div class="ticket-total">${(t.total||0).toFixed(3)} TND</div>
+      <div>${items||'--'}</div>
+      <div class="ticket-actions">
+        <button class="btn-edit" onclick="editTicketStatus(${tid})">Modifier</button>
+        <button class="btn-del" onclick="confirmDeleteTicket(${tid})">Supprimer</button>
+      </div>
+    </div>`;
   }).join('')||'<p style="color:var(--text-light)">Aucun ticket</p>';
 }
 
 function filterSales(){
   const from=document.getElementById('date-from').value;
   const to=document.getElementById('date-to').value;
+  const statusVal=document.getElementById('status-filter').value;
   filteredTickets=tickets.filter(t=>{
     const d=(t.date||t.timestamp||'').slice(0,10);
     if(from&&d<from)return false;
     if(to&&d>to)return false;
+    if(statusVal&&(t.status||'new')!==statusVal)return false;
     return true;
   });
   renderSales();
 }
-function clearFilter(){filteredTickets=null;document.getElementById('date-from').value='';document.getElementById('date-to').value='';renderSales()}
+function clearFilter(){
+  filteredTickets=null;
+  document.getElementById('date-from').value='';
+  document.getElementById('date-to').value='';
+  document.getElementById('status-filter').value='';
+  renderSales();
+}
+
+// ===== Ticket CRUD =====
+function confirmDeleteTicket(ticketId){
+  const t=tickets.find(t=>t.id===ticketId);
+  if(!t)return;
+  document.getElementById('modal-delete-ticket-msg').textContent=`Supprimer le ticket #${ticketId} (${(t.total||0).toFixed(3)} TND) ?`;
+  document.getElementById('modal-delete-ticket-btn').onclick=async()=>{
+    if(isOnline){await apiDelete('/api/tickets/'+ticketId)}
+    tickets=tickets.filter(tk=>tk.id!==ticketId);
+    saveLocal('tickets',tickets);
+    if(filteredTickets){filteredTickets=filteredTickets.filter(tk=>tk.id!==ticketId)}
+    closeModal('modal-delete-ticket');
+    renderSales();
+    toast('Ticket supprime');
+  };
+  document.getElementById('modal-delete-ticket').classList.remove('hidden');
+}
+
+function editTicketStatus(ticketId){
+  const t=tickets.find(t=>t.id===ticketId);
+  if(!t)return;
+  document.getElementById('modal-edit-ticket-msg').textContent=`Ticket #${ticketId} - ${(t.total||0).toFixed(3)} TND`;
+  document.getElementById('modal-edit-ticket-status').value=t.status||'new';
+  document.getElementById('modal-edit-ticket-btn').onclick=async()=>{
+    const newStatus=document.getElementById('modal-edit-ticket-status').value;
+    t.status=newStatus;
+    if(isOnline){await apiPut('/api/tickets/'+ticketId,{status:newStatus})}
+    saveLocal('tickets',tickets);
+    closeModal('modal-edit-ticket');
+    renderSales();
+    toast('Statut mis a jour');
+  };
+  document.getElementById('modal-edit-ticket').classList.remove('hidden');
+}
 
 // ===== Export =====
 function exportJSON(type){
@@ -938,6 +1087,47 @@ function logout(){
   location.reload();
 }
 
+// ===== Ingredients =====
+const DEFAULT_INGREDIENTS = ["Hrisa","Bsal","Tomate"];
+
+function loadIngredients(){
+  return loadLocal('ingredients') || [...DEFAULT_INGREDIENTS];
+}
+
+function saveIngredients(list){
+  saveLocal('ingredients', list);
+}
+
+function renderIngredients(){
+  const list = loadIngredients();
+  const container = document.getElementById('ingredients-list');
+  if(!container) return;
+  container.innerHTML = list.map((ing, i) =>
+    `<span class="ingredient-tag">${ing}<button onclick="removeIngredient(${i})" title="Supprimer">&times;</button></span>`
+  ).join('');
+}
+
+function addIngredient(){
+  const input = document.getElementById('new-ingredient');
+  const val = input.value.trim();
+  if(!val){toast('Nom requis','error');return}
+  const list = loadIngredients();
+  if(list.includes(val)){toast('Ingredient existe deja','error');return}
+  list.push(val);
+  saveIngredients(list);
+  input.value='';
+  renderIngredients();
+  toast('Ingredient ajoute');
+}
+
+function removeIngredient(idx){
+  const list = loadIngredients();
+  const removed = list.splice(idx, 1);
+  saveIngredients(list);
+  renderIngredients();
+  toast('Ingredient "'+removed[0]+'" supprime');
+}
+
 // ===== Modals =====
 function closeModal(id){document.getElementById(id).classList.add('hidden')}
 document.querySelectorAll('.modal-overlay').forEach(m=>{
@@ -951,6 +1141,7 @@ async function init(){
   await loadTickets();
   renderProducts();
   renderPinFields();
+  renderIngredients();
 }
 
 // Start with PIN pad
