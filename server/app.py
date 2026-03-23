@@ -140,8 +140,16 @@ def close_db(exception):
 
 
 def init_db():
+    global USE_POSTGRES
     if USE_POSTGRES:
-        conn = pg_connect()
+        try:
+            conn = pg_connect()
+        except Exception as e:
+            print(f"[WARN] PostgreSQL connection failed: {e}")
+            print("[WARN] Falling back to SQLite")
+            USE_POSTGRES = False
+            init_db()
+            return
         cur = conn.cursor()
         cur.execute('''CREATE TABLE IF NOT EXISTS products (
             id SERIAL PRIMARY KEY,
@@ -215,7 +223,12 @@ def row_to_dict(row):
 
 @app.route('/api/ping')
 def ping():
-    return jsonify({"status": "ok"})
+    return jsonify({
+        "status": "ok",
+        "database": "postgresql" if USE_POSTGRES else "sqlite",
+        "db_url_set": bool(os.environ.get('DATABASE_URL')),
+        "db_host_set": bool(os.environ.get('DB_HOST'))
+    })
 
 
 # ── Products ──
