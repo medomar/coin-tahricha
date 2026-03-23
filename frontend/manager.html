@@ -606,7 +606,7 @@ async function syncFromServer(){
   toast('Donnees synchronisees','success');
 }
 // Periodic connection check (every 15s)
-setInterval(()=>{checkSync()},15000);
+setInterval(()=>{checkSync()},30000);
 
 // ===== Data load/save =====
 function saveLocal(key,data){localStorage.setItem('cointahricha_'+key,JSON.stringify(data))}

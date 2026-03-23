@@ -933,7 +933,7 @@ async function initApp(){
   updatePendingBadge();
   await checkConnection();
   if(isOnline) syncPendingTickets();
-  setInterval(checkConnection,5000);
+  setInterval(checkConnection,30000);
 }
 
 // On load: check auth
