@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Cuisine - Coin Ta7richa</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --bg:#f5f7fa;
+  --surface:#ffffff;
+  --surface-muted:#f1f3f6;
+  --text:#2d3436;
+  --muted:#6b7280;
+  --muted-2:#9aa0a6;
+  --border:#e2e8f0;
+  --accent:#ff6b35;
+  --accent-2:#e17055;
+  --success:#22c55e;
+  --success-2:#16a34a;
+  --warning:#f59e0b;
+  --warning-bg:rgba(245,158,11,.12);
+  --info:#3b82f6;
+  --info-bg:rgba(59,130,246,.10);
+  --shadow:rgba(15,23,42,.08);
+  --shadow-strong:rgba(15,23,42,.12);
+  --new-border:#f59e0b;
+  --preparing-border:#3b82f6;
+}
+
+.dark{
+  --bg:#1a1a2e;
+  --surface:#16213e;
+  --surface-muted:#1e2d4a;
+  --text:#e2e8f0;
+  --muted:#94a3b8;
+  --muted-2:#64748b;
+  --border:#2d3a52;
+  --shadow:rgba(0,0,0,.3);
+  --shadow-strong:rgba(0,0,0,.4);
+  --warning-bg:rgba(245,158,11,.18);
+  --info-bg:rgba(59,130,246,.15);
+}
+
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ===== PIN SCREEN ===== */
+#pin-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+#pin-screen.hidden{display:none}
+.pin-logo{font-size:1.5rem;font-weight:800;color:var(--text);margin-bottom:8px;letter-spacing:-.5px;text-align:center}
+.pin-logo span{color:var(--accent)}
+.pin-subtitle{font-size:.85rem;color:var(--muted);margin-bottom:32px}
+.pin-dots{display:flex;gap:14px;margin-bottom:28px}
+.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all .2s}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:280px;width:100%}
+.pin-key{height:64px;border:2px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);font-size:1.4rem;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.pin-key:active{transform:scale(.92);background:var(--accent);border-color:var(--accent);color:#fff}
+.pin-key.del{color:var(--muted);font-size:1.1rem}
+.pin-error{color:var(--accent);font-size:.85rem;font-weight:600;margin-top:12px;min-height:20px;text-align:center}
+
+/* Header */
+header{background:var(--surface);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 12px var(--shadow);z-index:10;flex-shrink:0}
+.header-left{display:flex;align-items:center;gap:8px}
+.header-left h1{font-size:1.1rem;font-weight:800;letter-spacing:-.5px}
+.header-left h1 .icon{font-size:1.3rem}
+.header-left h1 .brand{color:var(--accent)}
+.status-dot{width:10px;height:10px;border-radius:50%;background:#9ca3af;flex-shrink:0}
+.status-dot.connected{background:var(--success);box-shadow:0 0 6px rgba(34,197,94,.5)}
+.header-right{display:flex;align-items:center;gap:10px}
+.header-btn{background:var(--surface-muted);border:1px solid var(--border);border-radius:10px;padding:6px 12px;font-size:.78rem;font-weight:600;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.header-btn:active{opacity:.7}
+.header-btn.active{color:var(--accent);border-color:var(--accent)}
+#clock{font-size:.85rem;font-weight:700;color:var(--text);min-width:50px;text-align:right}
+
+/* Main content */
+.main{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
+
+/* Order grid */
+.order-grid{display:grid;grid-template-columns:1fr;gap:12px}
+
+/* Order card */
+.order-card{background:var(--surface);border-radius:16px;padding:16px;border-left:5px solid var(--new-border);box-shadow:0 4px 12px var(--shadow);cursor:pointer;transition:transform .1s,opacity .3s,box-shadow .2s;animation:slideIn .3s ease-out}
+.order-card:active{transform:scale(.98)}
+.order-card.preparing{border-left-color:var(--preparing-border)}
+.order-card.fade-out{opacity:0;transform:scale(.95);transition:all .4s ease}
+
+@keyframes slideIn{
+  from{opacity:0;transform:translateY(20px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+.ticket-num{font-size:1.6rem;font-weight:900;color:var(--text);line-height:1}
+.card-meta{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.time-ago{font-size:.78rem;color:var(--muted);font-weight:500}
+.status-badge{display:inline-block;padding:4px 10px;border-radius:8px;font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+.badge-new{background:var(--warning-bg);color:var(--warning)}
+.badge-preparing{background:var(--info-bg);color:var(--info)}
+
+.item-list{margin-bottom:10px}
+.item-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:.88rem}
+.item-row .qty{font-weight:800;color:var(--accent);min-width:24px}
+.item-row .item-name{flex:1;margin-left:6px;font-weight:500}
+.item-row .item-price{color:var(--muted);font-size:.8rem;font-weight:500}
+
+.card-total{display:flex;justify-content:flex-end;align-items:center;padding-top:8px;border-top:1px solid var(--border)}
+.card-total span{font-size:1.1rem;font-weight:800;color:var(--accent)}
+
+/* Empty state */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted-2);text-align:center;padding:40px 20px}
+.empty-state .icon{font-size:4rem;margin-bottom:16px;opacity:.5}
+.empty-state .msg{font-size:1.1rem;font-weight:600}
+
+/* Offline fallback */
+.offline-msg{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);text-align:center;padding:40px 20px}
+.offline-msg .icon{font-size:3rem;margin-bottom:16px;opacity:.5}
+.offline-msg .msg{font-size:1rem;font-weight:600;margin-bottom:8px}
+.offline-msg .sub{font-size:.82rem;color:var(--muted-2)}
+
+/* Confirm overlay */
+.confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.confirm-box{background:var(--surface);border-radius:20px;padding:28px 24px;text-align:center;max-width:320px;width:100%;box-shadow:0 8px 30px var(--shadow-strong)}
+.confirm-box p{font-size:1.1rem;font-weight:700;margin-bottom:20px;color:var(--text)}
+.confirm-actions{display:flex;gap:10px}
+.confirm-actions button{flex:1;padding:14px;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer}
+.confirm-actions .btn-yes{background:linear-gradient(135deg,var(--success) 0%,var(--success-2) 100%);color:#fff}
+.confirm-actions .btn-no{background:var(--surface-muted);color:var(--muted)}
+
+/* Screen flash */
+@keyframes flashScreen{
+  0%{box-shadow:inset 0 0 0 0 rgba(245,158,11,0)}
+  30%{box-shadow:inset 0 0 60px 10px rgba(245,158,11,.2)}
+  100%{box-shadow:inset 0 0 0 0 rgba(245,158,11,0)}
+}
+.flash{animation:flashScreen .6s ease}
+
+/* Toast */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-100px);background:linear-gradient(135deg,var(--success-2) 0%,var(--success) 100%);color:#fff;padding:14px 28px;border-radius:14px;font-weight:700;font-size:.95rem;z-index:999;box-shadow:0 6px 14px rgba(34,197,94,.25);transition:transform .3s ease;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* Responsive */
+@media(min-width:500px){
+  .order-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(min-width:900px){
+  .order-grid{grid-template-columns:repeat(3,1fr)}
+}
+@media(min-width:1200px){
+  .order-grid{grid-template-columns:repeat(4,1fr)}
+}
+
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-8px)}
+  40%{transform:translateX(8px)}
+  60%{transform:translateX(-6px)}
+  80%{transform:translateX(6px)}
+}
+</style>
+</head>
+<body>
+
+<!-- PIN SCREEN -->
+<div id="pin-screen">
+  <div class="pin-logo">Cuisine - <span>Coin</span> Ta7richa</div>
+  <div class="pin-subtitle">Acc&egrave;s Cuisine</div>
+  <div class="pin-dots" id="pin-dots">
+    <div class="pin-dot" id="d0"></div>
+    <div class="pin-dot" id="d1"></div>
+    <div class="pin-dot" id="d2"></div>
+    <div class="pin-dot" id="d3"></div>
+  </div>
+  <div class="pin-keypad">
+    <button class="pin-key" onclick="pinKey('1')">1</button>
+    <button class="pin-key" onclick="pinKey('2')">2</button>
+    <button class="pin-key" onclick="pinKey('3')">3</button>
+    <button class="pin-key" onclick="pinKey('4')">4</button>
+    <button class="pin-key" onclick="pinKey('5')">5</button>
+    <button class="pin-key" onclick="pinKey('6')">6</button>
+    <button class="pin-key" onclick="pinKey('7')">7</button>
+    <button class="pin-key" onclick="pinKey('8')">8</button>
+    <button class="pin-key" onclick="pinKey('9')">9</button>
+    <button class="pin-key del" onclick="pinClear()">&#10005;</button>
+    <button class="pin-key" onclick="pinKey('0')">0</button>
+    <button class="pin-key del" onclick="pinBackspace()">&#9003;</button>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+</div>
+
+<div id="app" style="display:none;flex-direction:column;min-height:100dvh">
+<header>
+  <div class="header-left">
+    <h1><span class="icon">&#127859;</span> <span class="brand">Cuisine</span> &#8212; Coin Ta7richa</h1>
+    <div class="status-dot" id="status-dot" title="Serveur: d&eacute;connect&eacute;"></div>
+  </div>
+  <div class="header-right">
+    <a href="index.html" class="header-btn" style="text-decoration:none">&#8592; Caisse</a>
+    <a href="manager.html" class="header-btn" style="text-decoration:none">Manager</a>
+    <button class="header-btn active" id="btn-sound" title="Son des notifications">&#128264; Son</button>
+    <button class="header-btn" id="btn-dark" title="Mode sombre">&#9790; Sombre</button>
+    <span id="clock">--:--</span>
+  </div>
+</header>
+
+<div class="main" id="main-area">
+  <div class="order-grid" id="order-grid"></div>
+  <div class="empty-state" id="empty-state" style="display:none">
+    <div class="icon">&#10004;</div>
+    <div class="msg">Aucune commande en attente</div>
+  </div>
+  <div class="offline-msg" id="offline-msg" style="display:none">
+    <div class="icon">&#9888;</div>
+    <div class="msg">Serveur non disponible</div>
+    <div class="sub">Mode local &#8212; les tickets seront lus depuis localStorage</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ===========================
+// API HELPERS
+// ===========================
+var API_BASE = (function() {
+  var params = new URLSearchParams(window.location.search);
+  var api = params.get('api');
+  if (api) {
+    localStorage.setItem('api_base', api);
+    return api;
+  }
+  var stored = localStorage.getItem('api_base');
+  if (stored) return stored;
+  return '';
+})();
+var _online = false;
+
+function apiGet(path) {
+  return fetch(API_BASE + '/api' + path, {signal: AbortSignal.timeout(5000)})
+    .then(function(res) {
+      if (!res.ok) throw new Error('API ' + res.status);
+      return res.json();
+    });
+}
+
+function apiPut(path, body) {
+  return fetch(API_BASE + '/api' + path, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(res) {
+    if (!res.ok) throw new Error('API ' + res.status);
+    return res.json();
+  });
+}
+
+function apiPost(path, body) {
+  return fetch(API_BASE + '/api' + path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(5000)
+  }).then(function(res) {
+    if (!res.ok) throw new Error('API ' + res.status);
+    return res.json();
+  });
+}
+
+function updateConnDot(online) {
+  _online = online;
+  var dot = document.getElementById('status-dot');
+  if (!dot) return;
+  if (online) {
+    dot.classList.add('connected');
+    dot.title = 'Connect\u00e9 (serveur)';
+  } else {
+    dot.classList.remove('connected');
+    dot.title = 'Hors ligne (localStorage)';
+  }
+}
+
+function checkPing() {
+  fetch(API_BASE + '/api/ping', {method: 'GET', signal: AbortSignal.timeout(3000)})
+    .then(function(res) { updateConnDot(res.ok); })
+    .catch(function() { updateConnDot(false); });
+}
+setInterval(checkPing, 5000);
+checkPing();
+
+// --- Data reset mechanism (?reset=true) ---
+(function() {
+  if (new URLSearchParams(window.location.search).get('reset') === 'true') {
+    ['cointahricha_caisse_pin', 'cointahricha_cuisine_pin'].forEach(function(k) {
+      localStorage.removeItem(k);
+    });
+    apiPost('/products/reset').catch(function() {
+      ['cointahricha_products', 'pos_tickets', 'pos_sessions', 'cointahricha_manager_pin'].forEach(function(k) {
+        localStorage.removeItem(k);
+      });
+    }).then(function() {
+      window.location.replace(window.location.pathname);
+    });
+    return;
+  }
+})();
+
+// ===========================
+// PIN PROTECTION
+// ===========================
+var LS_PIN = 'cointahricha_cuisine_pin';
+var SS_AUTH = 'cointahricha_cuisine_auth';
+var SESSION_TTL = 8 * 60 * 60 * 1000; // 8 hours
+
+function lsGet(key, fallback) {
+  try {
+    var v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+}
+
+var pinBuffer = [];
+var appInited = false;
+
+function checkSession() {
+  var ts = sessionStorage.getItem(SS_AUTH);
+  if (!ts) return false;
+  return Date.now() - parseInt(ts, 10) < SESSION_TTL;
+}
+
+function unlockSession() {
+  sessionStorage.setItem(SS_AUTH, Date.now().toString());
+  document.getElementById('pin-screen').classList.add('hidden');
+  var app = document.getElementById('app');
+  app.style.display = 'flex';
+  initApp();
+}
+
+function pinKey(digit) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer.push(digit);
+  updatePinDots();
+  if (pinBuffer.length === 4) {
+    setTimeout(checkPin, 150);
+  }
+}
+
+function pinBackspace() {
+  pinBuffer.pop();
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function pinClear() {
+  pinBuffer = [];
+  updatePinDots();
+  document.getElementById('pin-error').textContent = '';
+}
+
+function updatePinDots() {
+  for (var i = 0; i < 4; i++) {
+    document.getElementById('d' + i).classList.toggle('filled', i < pinBuffer.length);
+  }
+}
+
+function checkPin() {
+  var stored = String(lsGet(LS_PIN, '1234'));
+  if (pinBuffer.join('') === stored) {
+    unlockSession();
+  } else {
+    document.getElementById('pin-error').textContent = 'PIN incorrect. R\u00e9essayez.';
+    pinBuffer = [];
+    updatePinDots();
+    var dots = document.getElementById('pin-dots');
+    dots.style.animation = 'none';
+    dots.offsetHeight;
+    dots.style.animation = 'shake 0.4s';
+  }
+}
+
+function initApp() {
+  if (appInited) return;
+  appInited = true;
+
+  // ── State ──
+  var orders = {};
+  var soundEnabled = true;
+  var darkMode = false;
+  var audioCtx = null;
+  var confirmTicketId = null;
+  var lastTicketCount = 0;
+  var doneTimers = {};
+
+  // ── Audio (Web Audio API, 880Hz sine) ──
+  function playBeep() {
+    if (!soundEnabled) return;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.value = 0.3;
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+      osc.stop(audioCtx.currentTime + 0.35);
+    } catch (e) {}
+  }
+
+  // ── Clock (updates every 10s) ──
+  function updateClock() {
+    var now = new Date();
+    document.getElementById('clock').textContent =
+      now.getHours().toString().padStart(2, '0') + ':' +
+      now.getMinutes().toString().padStart(2, '0');
+  }
+  updateClock();
+  setInterval(updateClock, 10000);
+
+  // ── Time ago ──
+  function timeAgo(isoStr) {
+    var diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
+    if (diff < 60) return '\u00e0 l\'instant';
+    var mins = Math.floor(diff / 60);
+    if (mins < 60) return mins + ' min';
+    var hrs = Math.floor(mins / 60);
+    return hrs + 'h ' + (mins % 60) + 'min';
+  }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ── Render ──
+  function render() {
+    var grid = document.getElementById('order-grid');
+    var empty = document.getElementById('empty-state');
+    var offline = document.getElementById('offline-msg');
+    offline.style.display = 'none';
+
+    var active = Object.values(orders)
+      .filter(function(o) {
+        return o.status === 'new' || o.status === 'en_preparation' || o.status === 'preparing';
+      })
+      .sort(function(a, b) {
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+
+    if (!active.length) {
+      grid.style.display = 'none';
+      empty.style.display = 'flex';
+      return;
+    }
+
+    grid.style.display = 'grid';
+    empty.style.display = 'none';
+
+    grid.innerHTML = active.map(function(o) {
+      var isNew = o.status === 'new';
+      var badgeClass = isNew ? 'badge-new' : 'badge-preparing';
+      var badgeText = isNew ? 'NOUVEAU' : 'EN COURS';
+      var cardClass = isNew ? '' : ' preparing';
+      var items = o.items || [];
+      var total = o.total || items.reduce(function(s, i) { return s + i.quantity * i.price; }, 0);
+
+      return '<div class="order-card' + cardClass + '" data-id="' + o.id + '" onclick="window._kitchenTap(\'' + o.id + '\',\'' + o.status + '\')">' +
+        '<div class="card-top">' +
+          '<div class="ticket-num">#' + o.id + '</div>' +
+          '<div class="card-meta">' +
+            '<span class="time-ago">' + timeAgo(o.created_at) + '</span>' +
+            '<span class="status-badge ' + badgeClass + '">' + badgeText + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="item-list">' +
+          items.map(function(i) {
+            return '<div class="item-row">' +
+              '<span class="qty">' + i.quantity + '\u00d7</span>' +
+              '<span class="item-name">' + esc(i.name) + '</span>' +
+              '<span class="item-price">' + (i.quantity * i.price).toFixed(3) + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+        '<div class="card-total"><span>' + total.toFixed(3) + ' TND</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Update time-ago every 15s
+  setInterval(render, 15000);
+
+  // ── Update ticket status via API with localStorage fallback ──
+  function updateTicketStatus(ticketId, newStatus) {
+    apiPut('/tickets/' + ticketId, {status: newStatus}).catch(function() {
+      // Fallback to localStorage
+      try {
+        var raw = localStorage.getItem('pos_tickets');
+        if (!raw) return;
+        var tickets = JSON.parse(raw);
+        tickets.forEach(function(t) {
+          if (String(t.id) === String(ticketId)) t.status = newStatus;
+        });
+        localStorage.setItem('pos_tickets', JSON.stringify(tickets));
+      } catch (e) {}
+    });
+  }
+
+  // ── Tap handler ──
+  window._kitchenTap = function(ticketId, status) {
+    if (status === 'new') {
+      if (orders[ticketId]) orders[ticketId].status = 'preparing';
+      updateTicketStatus(ticketId, 'preparing');
+      render();
+      showToast('Commande #' + ticketId + ' en cours');
+    } else if (status === 'preparing' || status === 'en_preparation') {
+      showConfirm(ticketId);
+    }
+  };
+
+  // ── Confirm dialog ──
+  function showConfirm(ticketId) {
+    confirmTicketId = ticketId;
+    var overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.id = 'confirm-overlay';
+    overlay.innerHTML = '<div class="confirm-box">' +
+      '<p>Marquer commande #' + ticketId + ' comme termin\u00e9e ?</p>' +
+      '<div class="confirm-actions">' +
+        '<button class="btn-no" onclick="window._confirmCancel()">Non</button>' +
+        '<button class="btn-yes" onclick="window._confirmDone()">Oui \u2714</button>' +
+      '</div>' +
+    '</div>';
+    document.body.appendChild(overlay);
+  }
+
+  window._confirmCancel = function() {
+    var el = document.getElementById('confirm-overlay');
+    if (el) el.remove();
+    confirmTicketId = null;
+  };
+
+  window._confirmDone = function() {
+    var el = document.getElementById('confirm-overlay');
+    if (el) el.remove();
+    if (!confirmTicketId) return;
+
+    var card = document.querySelector('.order-card[data-id="' + confirmTicketId + '"]');
+    if (card) card.classList.add('fade-out');
+
+    var id = confirmTicketId;
+    confirmTicketId = null;
+
+    updateTicketStatus(id, 'done');
+
+    setTimeout(function() {
+      if (orders[id]) orders[id].status = 'done';
+      showToast('Commande #' + id + ' termin\u00e9e !');
+      render();
+      doneTimers[id] = setTimeout(function() {
+        delete orders[id];
+        delete doneTimers[id];
+        render();
+      }, 30000);
+    }, 400);
+  };
+
+  // ── Toast ──
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, 2500);
+  }
+
+  // ── Screen flash ──
+  function flashScreen() {
+    var main = document.getElementById('main-area');
+    main.classList.remove('flash');
+    void main.offsetWidth;
+    main.classList.add('flash');
+  }
+
+  // ── Poll tickets from API (with localStorage fallback) ──
+  function pollTickets() {
+    if (_online) {
+      apiGet('/tickets?status=new,en_preparation,preparing').then(function(tickets) {
+        var hasNew = false;
+        tickets.forEach(function(t) {
+          if (!t.status) t.status = 'new';
+          if (!orders[t.id] && t.status === 'new') hasNew = true;
+          orders[t.id] = t;
+        });
+        // Remove orders that are no longer active on server
+        var activeIds = {};
+        tickets.forEach(function(t) { activeIds[t.id] = true; });
+        Object.keys(orders).forEach(function(id) {
+          if (!activeIds[id] && orders[id].status !== 'done') delete orders[id];
+        });
+        if (hasNew) { playBeep(); flashScreen(); }
+        render();
+      }).catch(function() {
+        pollLocalStorage();
+      });
+    } else {
+      pollLocalStorage();
+    }
+  }
+
+  function pollLocalStorage() {
+    try {
+      var raw = localStorage.getItem('pos_tickets');
+      if (!raw) {
+        // Show offline state if not connected
+        if (!_online) {
+          var grid = document.getElementById('order-grid');
+          var empty = document.getElementById('empty-state');
+          var offline = document.getElementById('offline-msg');
+          grid.style.display = 'none';
+          empty.style.display = 'none';
+          offline.style.display = 'flex';
+        }
+        return;
+      }
+      var tickets = JSON.parse(raw);
+      var hasNew = false;
+
+      tickets.forEach(function(t) {
+        if (!t.status) t.status = 'new';
+        if (t.status === 'new' || t.status === 'preparing' || t.status === 'en_preparation') {
+          if (!orders[t.id] && t.status === 'new') hasNew = true;
+          orders[t.id] = t;
+        }
+      });
+
+      if (hasNew) { playBeep(); flashScreen(); }
+      render();
+    } catch (e) {}
+  }
+
+  // ── Sound toggle ──
+  document.getElementById('btn-sound').addEventListener('click', function() {
+    soundEnabled = !soundEnabled;
+    this.classList.toggle('active', soundEnabled);
+    this.innerHTML = soundEnabled ? '&#128264; Son' : '&#128263; Muet';
+    if (soundEnabled && !audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    }
+  });
+
+  // ── Dark mode toggle ──
+  document.getElementById('btn-dark').addEventListener('click', function() {
+    darkMode = !darkMode;
+    document.body.classList.toggle('dark', darkMode);
+    this.classList.toggle('active', darkMode);
+  });
+
+  // ── Init: poll immediately, then every 2 seconds ──
+  pollTickets();
+  setInterval(pollTickets, 2000);
+}
+
+// ===========================
+// BOOT
+// ===========================
+if (checkSession()) {
+  document.getElementById('pin-screen').classList.add('hidden');
+  var app = document.getElementById('app');
+  app.style.display = 'flex';
+  initApp();
+}
+</script>
+</body>
+</html>

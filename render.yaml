@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: coin-tahricha
+    rootDir: server
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PORT
+        value: 10000

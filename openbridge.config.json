@@ -1,0 +1,28 @@
+{
+  "workspacePath": ".",
+  "projectType": "food-pos",
+  "description": "Coin Ta7richa POS - Point de vente pour coin ta7richa. Systeme de caisse, affichage cuisine, et tableau de bord manager.",
+  "channels": [
+    { "type": "whatsapp", "enabled": true },
+    { "type": "webchat", "enabled": true },
+    { "type": "console", "enabled": true }
+  ],
+  "auth": {
+    "prefix": "/ai",
+    "defaultRole": "owner"
+  },
+  "security": {
+    "trustLevel": "trusted",
+    "confirmHighRisk": true
+  },
+  "audit": { "enabled": true },
+  "hints": {
+    "framework": "flask",
+    "frontend": "vanilla-html-css-js",
+    "database": "sqlite",
+    "deployment": "render.com",
+    "language": "french",
+    "currency": "TND",
+    "industry": "restaurant"
+  }
+}

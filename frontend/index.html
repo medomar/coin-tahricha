@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ff6b35">
+<link rel="manifest" href="manifest.json">
+<title>Coin Ta7richa - Caisse</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --orange:#ff6b35;--orange-dark:#e55a2b;--orange-light:#fff3ed;
+  --bg:#f5f5f7;--card:#fff;--text:#1d1d1f;--text2:#6e6e73;
+  --border:#e5e5ea;--success:#34c759;--danger:#ff3b30;
+  --radius:14px;--shadow:0 2px 12px rgba(0,0,0,.08);
+  --cart-width:360px;
+}
+html{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);-webkit-tap-highlight-color:transparent}
+body{min-height:100dvh;padding-bottom:env(safe-area-inset-bottom,0)}
+
+/* ---- PIN OVERLAY ---- */
+#pin-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1d1d1f 0%,#3a3a3c 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;transition:opacity .4s}
+#pin-overlay.hidden{opacity:0;pointer-events:none}
+#pin-overlay h1{color:#fff;font-size:1.6rem;font-weight:700}
+#pin-overlay .subtitle{color:#aeaeb2;font-size:.9rem}
+.pin-dots{display:flex;gap:14px;margin:8px 0 4px}
+.pin-dots span{width:16px;height:16px;border-radius:50%;border:2px solid #636366;transition:all .2s}
+.pin-dots span.filled{background:var(--orange);border-color:var(--orange)}
+.pin-error{color:var(--danger);font-size:.85rem;min-height:1.2em}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,76px);gap:12px}
+.pin-keypad button{height:76px;border-radius:50%;border:1.5px solid #636366;background:transparent;color:#fff;font-size:1.7rem;font-weight:500;cursor:pointer;transition:all .15s}
+.pin-keypad button:active{background:var(--orange);border-color:var(--orange);transform:scale(.92)}
+.pin-keypad .pin-zero{grid-column:2}
+.pin-keypad .pin-back{font-size:1.2rem;border:none}
+
+/* ---- HEADER ---- */
+header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+header .logo{font-weight:800;font-size:1.25rem;color:var(--orange);white-space:nowrap}
+header .conn-dot{width:10px;height:10px;border-radius:50%;background:#aeaeb2;flex-shrink:0;transition:background .3s}
+header .conn-dot.online{background:var(--success)}
+header nav{margin-left:auto;display:flex;gap:8px}
+header nav a{font-size:.78rem;color:var(--text2);text-decoration:none;padding:6px 10px;border-radius:8px;background:var(--bg);transition:all .2s}
+header nav a:hover{background:var(--orange-light);color:var(--orange)}
+
+/* ---- SEARCH ---- */
+.search-wrap{padding:10px 16px 0;position:sticky;top:54px;z-index:90;background:var(--bg)}
+.search-wrap input{width:100%;padding:10px 14px 10px 38px;border-radius:10px;border:1px solid var(--border);font-size:.95rem;background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23aeaeb2' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.868-3.834zm-5.44.81a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z'/%3E%3C/svg%3E") no-repeat 12px center;outline:none;transition:border .2s}
+.search-wrap input:focus{border-color:var(--orange)}
+
+/* ---- TABS ---- */
+.tab-bar{display:flex;gap:6px;padding:12px 16px 6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab-bar::-webkit-scrollbar{display:none}
+.tab-btn{padding:8px 18px;border-radius:20px;border:none;font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap;background:var(--card);color:var(--text2);border:1.5px solid var(--border);transition:all .2s}
+.tab-btn.active{background:var(--orange);color:#fff;border-color:var(--orange)}
+
+/* ---- MAIN LAYOUT ---- */
+.main-wrap{display:flex;min-height:calc(100dvh - 54px)}
+.products-area{flex:1;padding:8px 16px 100px}
+
+/* sub-section headings */
+.sub-heading{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin:18px 0 8px;padding-left:4px}
+
+/* product grid */
+.product-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.product-card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column;gap:4px;user-select:none}
+.product-card:active{transform:scale(.96)}
+.product-card .p-name{font-size:.9rem;font-weight:600;line-height:1.25}
+.product-card .p-price{font-size:.95rem;font-weight:700;color:var(--orange)}
+
+/* ---- CART (Desktop sidebar) ---- */
+.cart-sidebar{width:var(--cart-width);background:var(--card);border-left:1px solid var(--border);display:none;flex-direction:column;position:sticky;top:54px;height:calc(100dvh - 54px);overflow:hidden}
+.cart-header{padding:16px;font-weight:700;font-size:1.05rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.cart-items{flex:1;overflow-y:auto;padding:8px 12px}
+.cart-empty{text-align:center;color:var(--text2);padding:40px 0;font-size:.9rem}
+.cart-item{display:flex;align-items:center;gap:8px;padding:10px 4px;border-bottom:1px solid var(--border)}
+.cart-item .ci-name{flex:1;font-size:.85rem;font-weight:500;line-height:1.2}
+.cart-item .ci-price{font-size:.85rem;font-weight:600;color:var(--orange);min-width:60px;text-align:right}
+.qty-ctrl{display:flex;align-items:center;gap:4px}
+.qty-ctrl button{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);font-size:1.1rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.qty-ctrl button:active{background:var(--orange-light)}
+.qty-ctrl span{min-width:22px;text-align:center;font-weight:600;font-size:.9rem}
+.cart-footer{padding:14px 16px;border-top:1px solid var(--border)}
+.cart-total{display:flex;justify-content:space-between;font-size:1.15rem;font-weight:700;margin-bottom:12px}
+.btn-encaisser{width:100%;padding:14px;border:none;border-radius:var(--radius);background:var(--orange);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;transition:background .2s}
+.btn-encaisser:active{background:var(--orange-dark)}
+.btn-encaisser:disabled{background:#aeaeb2;cursor:not-allowed}
+
+/* ---- CART (Mobile slide-up) ---- */
+.cart-mobile-toggle{display:none}
+#cart-mobile-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200}
+#cart-mobile-panel{position:fixed;bottom:0;left:0;right:0;z-index:210;background:var(--card);border-radius:20px 20px 0 0;max-height:80dvh;display:none;flex-direction:column;transform:translateY(100%);transition:transform .3s ease}
+#cart-mobile-panel.open{transform:translateY(0)}
+.cart-mobile-handle{width:40px;height:4px;border-radius:2px;background:#d1d1d6;margin:10px auto 6px}
+
+/* ---- BOTTOM BAR (Mobile) ---- */
+.bottom-bar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:150;background:var(--card);border-top:1px solid var(--border);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0));align-items:center;gap:10px}
+.bottom-bar .bb-total{font-weight:700;font-size:1.1rem;flex:1}
+.bottom-bar .bb-cart-btn{position:relative;width:46px;height:46px;border-radius:50%;background:var(--orange);color:#fff;border:none;font-size:1.2rem;cursor:pointer}
+.bottom-bar .bb-cart-btn .badge{position:absolute;top:-2px;right:-2px;min-width:20px;height:20px;border-radius:10px;background:var(--danger);color:#fff;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.bottom-bar .bb-session-btn{padding:10px 16px;border-radius:10px;border:1.5px solid var(--orange);background:transparent;color:var(--orange);font-weight:600;font-size:.85rem;cursor:pointer;white-space:nowrap;transition:all .2s}
+.bottom-bar .bb-session-btn.active{background:var(--orange);color:#fff}
+
+/* ---- SESSION BUTTON (Desktop, in cart sidebar) ---- */
+.btn-session{width:100%;padding:10px;border:1.5px solid var(--orange);border-radius:10px;background:transparent;color:var(--orange);font-weight:600;font-size:.85rem;cursor:pointer;margin-top:8px;transition:all .2s}
+.btn-session.active{background:var(--orange);color:#fff}
+
+/* ---- TOAST ---- */
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-120%);z-index:10000;background:#1d1d1f;color:#fff;padding:12px 24px;border-radius:12px;font-size:.9rem;font-weight:500;transition:transform .35s ease;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ---- RESPONSIVE ---- */
+@media(min-width:768px){
+  .product-grid{grid-template-columns:repeat(3,1fr)}
+  .cart-sidebar{display:flex}
+  .bottom-bar{display:none!important}
+  .products-area{padding-bottom:20px}
+}
+@media(max-width:767px){
+  .bottom-bar{display:flex}
+  .cart-mobile-toggle{display:block}
+  #cart-mobile-overlay,#cart-mobile-panel{display:flex;flex-direction:column}
+  #cart-mobile-panel{display:flex}
+}
+</style>
+</head>
+<body>
+
+<!-- PIN OVERLAY -->
+<div id="pin-overlay">
+  <h1>Coin Ta7richa</h1>
+  <p class="subtitle">Entrez le code PIN pour continuer</p>
+  <div class="pin-dots"><span></span><span></span><span></span><span></span></div>
+  <p class="pin-error" id="pin-error"></p>
+  <div class="pin-keypad">
+    <button onclick="pinDigit('1')">1</button><button onclick="pinDigit('2')">2</button><button onclick="pinDigit('3')">3</button>
+    <button onclick="pinDigit('4')">4</button><button onclick="pinDigit('5')">5</button><button onclick="pinDigit('6')">6</button>
+    <button onclick="pinDigit('7')">7</button><button onclick="pinDigit('8')">8</button><button onclick="pinDigit('9')">9</button>
+    <button class="pin-back" onclick="pinBack()">&#9003;</button><button class="pin-zero" onclick="pinDigit('0')">0</button><button class="pin-back" onclick="pinSubmit()">&#10003;</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <span class="logo">Coin Ta7richa</span>
+  <span class="conn-dot" id="conn-dot" title="Statut connexion"></span>
+  <nav>
+    <a href="kitchen.html">Cuisine</a>
+    <a href="manager.html">Manager</a>
+  </nav>
+</header>
+
+<!-- SEARCH -->
+<div class="search-wrap">
+  <input type="text" id="search-input" placeholder="Rechercher un produit...">
+</div>
+
+<!-- TABS -->
+<div class="tab-bar" id="tab-bar"></div>
+
+<!-- MAIN -->
+<div class="main-wrap">
+  <div class="products-area" id="products-area"></div>
+
+  <!-- CART SIDEBAR (desktop) -->
+  <aside class="cart-sidebar" id="cart-sidebar">
+    <div class="cart-header"><span>Panier</span><span id="cart-count-desk">0 article(s)</span></div>
+    <div class="cart-items" id="cart-items-desk"></div>
+    <div class="cart-footer">
+      <div class="cart-total"><span>Total</span><span id="cart-total-desk">0.000 TND</span></div>
+      <button class="btn-encaisser" id="btn-encaisser-desk" onclick="encaisser()" disabled>Encaisser</button>
+      <button class="btn-session" id="btn-session-desk" onclick="toggleSession()">Ouvrir Session</button>
+    </div>
+  </aside>
+</div>
+
+<!-- BOTTOM BAR (mobile) -->
+<div class="bottom-bar">
+  <span class="bb-total" id="bb-total">0.000 TND</span>
+  <button class="bb-session-btn" id="bb-session" onclick="toggleSession()">Session</button>
+  <button class="bb-cart-btn" onclick="openMobileCart()">
+    &#128722;
+    <span class="badge" id="bb-badge" style="display:none">0</span>
+  </button>
+</div>
+
+<!-- MOBILE CART OVERLAY -->
+<div id="cart-mobile-overlay" onclick="closeMobileCart()"></div>
+<div id="cart-mobile-panel">
+  <div class="cart-mobile-handle"></div>
+  <div class="cart-header"><span>Panier</span><span id="cart-count-mob">0 article(s)</span></div>
+  <div class="cart-items" id="cart-items-mob" style="flex:1;overflow-y:auto;padding:8px 12px"></div>
+  <div class="cart-footer">
+    <div class="cart-total"><span>Total</span><span id="cart-total-mob">0.000 TND</span></div>
+    <button class="btn-encaisser" id="btn-encaisser-mob" onclick="encaisser()" disabled>Encaisser</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==========================================================
+   COIN TA7RICHA — CAISSE POS
+   ========================================================== */
+
+// ---- DEFAULT PRODUCTS ----
+const DEFAULT_PRODUCTS = [
+  {name:"Sahfa Dro3",price:2.0,category:"COIN DRO3"},
+  {name:"Sahfa Yawmiya",price:3.0,category:"COIN DRO3"},
+  {name:"Sahfa Mshakhshkha",price:6.0,category:"COIN DRO3"},
+  {name:"Sahfa Mahmula",price:0.8,category:"COIN DRO3"},
+
+  {name:"Thon",price:3.9,category:"COIN MELAH"},
+  {name:"Salami",price:2.5,category:"COIN MELAH"},
+  {name:"Jambon",price:2.7,category:"COIN MELAH"},
+  {name:"Salami Hsan",price:4.0,category:"COIN MELAH"},
+  {name:"Supp Thon",price:2.5,category:"COIN MELAH"},
+  {name:"Supp Salami",price:1.5,category:"COIN MELAH"},
+  {name:"Supp Jambon",price:1.5,category:"COIN MELAH"},
+  {name:"Supp Salami Hsan",price:3.0,category:"COIN MELAH"},
+  {name:"Supp Ricotta",price:1.0,category:"COIN MELAH"},
+  {name:"Supp Gruyere",price:2.5,category:"COIN MELAH"},
+  {name:"Supp Fromage Triangle",price:0.6,category:"COIN MELAH"},
+  {name:"Supp Adma",price:0.5,category:"COIN MELAH"},
+
+  {name:"Khobz Mlawi",price:0.6,category:"COIN HLOU"},
+  {name:"Khobz Tabuna",price:0.6,category:"COIN HLOU"},
+  {name:"Zbeda/Ma3jun/Shamiya",price:1.8,category:"COIN HLOU"},
+  {name:"Zbeda + Ma3jun/Shamiya",price:2.1,category:"COIN HLOU"},
+  {name:"Ma3jun + Shamiya",price:2.1,category:"COIN HLOU"},
+  {name:"Zbeda + Ma3jun + Shamiya",price:2.4,category:"COIN HLOU"},
+  {name:"Ricotta",price:2.1,category:"COIN HLOU"},
+  {name:"Ricotta + Zbeda/Ma3jun/Shamiya",price:2.4,category:"COIN HLOU"},
+  {name:"Ricotta + Zbeda + Ma3jun/Shamiya",price:2.7,category:"COIN HLOU"},
+  {name:"Ricotta + Ma3jun + Shamiya",price:2.7,category:"COIN HLOU"},
+  {name:"Ricotta + Zbeda + Ma3jun + Shamiya",price:3.0,category:"COIN HLOU"},
+  {name:"Douza Chocolat",price:0.8,category:"COIN HLOU"},
+  {name:"Douza Asal",price:0.5,category:"COIN HLOU"},
+  {name:"Zbeda Arbi",price:0.5,category:"COIN HLOU"}
+];
+
+const CATEGORIES = ["COIN DRO3","COIN MELAH","COIN HLOU"];
+const LS = {
+  pin:'cointahricha_caisse_pin',
+  auth:'cointahricha_caisse_auth',
+  api:'api_base',
+  products:'cointahricha_products',
+  session:'cointahricha_session'
+};
+const AUTH_TTL = 8*60*60*1000; // 8 hours
+
+// ---- API URL AUTO-DETECTION ----
+function detectApi(){
+  const params = new URLSearchParams(location.search);
+  if(params.get('reset')==='true'){
+    localStorage.removeItem(LS.products);
+    localStorage.removeItem(LS.session);
+    localStorage.removeItem(LS.api);
+    toast('Donn\u00e9es r\u00e9initialis\u00e9es');
+    // remove param from URL
+    const url = new URL(location.href);
+    url.searchParams.delete('reset');
+    history.replaceState(null,'',url);
+  }
+  if(params.get('api')){
+    const apiUrl = params.get('api').replace(/\/$/,'');
+    localStorage.setItem(LS.api, apiUrl);
+    // clean URL
+    const url = new URL(location.href);
+    url.searchParams.delete('api');
+    history.replaceState(null,'',url);
+    return apiUrl;
+  }
+  if(localStorage.getItem(LS.api)){
+    return localStorage.getItem(LS.api);
+  }
+  // Same-origin: use relative URL (works on Render where frontend+backend share origin)
+  return '';
+}
+
+let API_BASE = detectApi();
+
+async function apiFetch(path, opts={}){
+  const url = API_BASE + path;
+  try{
+    const r = await fetch(url, {
+      ...opts,
+      headers:{'Content-Type':'application/json',...(opts.headers||{})},
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    });
+    if(!r.ok) throw new Error(r.status);
+    return await r.json();
+  }catch(e){
+    return null;
+  }
+}
+
+// ---- PIN ----
+let pinBuffer = '';
+function pinDigit(d){
+  if(pinBuffer.length>=4) return;
+  pinBuffer += d;
+  updatePinDots();
+  if(pinBuffer.length===4) setTimeout(pinSubmit,150);
+}
+function pinBack(){
+  pinBuffer = pinBuffer.slice(0,-1);
+  updatePinDots();
+  document.getElementById('pin-error').textContent='';
+}
+function updatePinDots(){
+  document.querySelectorAll('.pin-dots span').forEach((s,i)=>{
+    s.classList.toggle('filled',i<pinBuffer.length);
+  });
+}
+function pinSubmit(){
+  const stored = localStorage.getItem(LS.pin)||'1234';
+  if(pinBuffer===String(stored)){
+    sessionStorage.setItem(LS.auth, JSON.stringify({ts:Date.now()}));
+    document.getElementById('pin-overlay').classList.add('hidden');
+    initApp();
+  } else {
+    document.getElementById('pin-error').textContent='Code incorrect';
+    pinBuffer='';
+    updatePinDots();
+  }
+}
+function checkAuth(){
+  try{
+    const a = JSON.parse(sessionStorage.getItem(LS.auth));
+    if(a && (Date.now()-a.ts)<AUTH_TTL) return true;
+  }catch(e){}
+  return false;
+}
+
+// ---- TOAST ----
+let toastTimer;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
+}
+
+// ---- STATE ----
+let products = [];
+let activeTab = CATEGORIES[0];
+let cart = []; // {name, price, qty, category}
+let currentSession = null;
+let searchQuery = '';
+let isOnline = false;
+
+// ---- PRODUCTS LOADING ----
+async function loadProducts(){
+  // Try API
+  const data = await apiFetch('/api/products');
+  if(data && Array.isArray(data) && data.length>0){
+    products = data;
+    localStorage.setItem(LS.products, JSON.stringify(products));
+    return;
+  }
+  // Try localStorage
+  try{
+    const cached = JSON.parse(localStorage.getItem(LS.products));
+    if(cached && cached.length>0){ products=cached; return; }
+  }catch(e){}
+  // Fallback
+  products = DEFAULT_PRODUCTS;
+  localStorage.setItem(LS.products, JSON.stringify(products));
+}
+
+// ---- SESSION ----
+async function loadSession(){
+  try{
+    const s = JSON.parse(localStorage.getItem(LS.session));
+    if(s && s.id) currentSession = s;
+  }catch(e){}
+  updateSessionUI();
+}
+
+async function toggleSession(){
+  if(currentSession){
+    // Close session
+    await apiFetch('/api/sessions/'+currentSession.id, {method:'PUT', body:{status:'closed', closed_at:new Date().toISOString()}});
+    currentSession = null;
+    localStorage.removeItem(LS.session);
+    toast('Session ferm\u00e9e');
+  } else {
+    // Open session
+    const body = {status:'open', opened_at:new Date().toISOString()};
+    const res = await apiFetch('/api/sessions',{method:'POST',body});
+    if(res && res.id){
+      currentSession = res;
+    } else {
+      // Offline fallback
+      currentSession = {id:'local_'+Date.now(), ...body};
+    }
+    localStorage.setItem(LS.session, JSON.stringify(currentSession));
+    toast('Session ouverte');
+  }
+  updateSessionUI();
+}
+
+function updateSessionUI(){
+  const active = !!currentSession;
+  // Desktop
+  const deskBtn = document.getElementById('btn-session-desk');
+  deskBtn.textContent = active?'Fermer Session':'Ouvrir Session';
+  deskBtn.classList.toggle('active',active);
+  document.getElementById('btn-encaisser-desk').disabled = !active;
+  // Mobile
+  const mobBtn = document.getElementById('bb-session');
+  mobBtn.textContent = active?'Fermer':'Session';
+  mobBtn.classList.toggle('active',active);
+  document.getElementById('btn-encaisser-mob').disabled = !active;
+}
+
+// ---- RENDER TABS ----
+function renderTabs(){
+  const bar = document.getElementById('tab-bar');
+  bar.innerHTML = CATEGORIES.map(c =>
+    `<button class="tab-btn ${c===activeTab?'active':''}" onclick="switchTab('${c}')">${c}</button>`
+  ).join('');
+}
+
+function switchTab(cat){
+  activeTab = cat;
+  renderTabs();
+  renderProducts();
+}
+
+// ---- RENDER PRODUCTS ----
+function renderProducts(){
+  const area = document.getElementById('products-area');
+  const q = searchQuery.toLowerCase().trim();
+  let items = products.filter(p=>p.category===activeTab);
+
+  // For COIN MELAH or COIN HLOU, show sub-sections
+  const useSubSections = (activeTab==='COIN HLOU'||activeTab==='COIN MELAH');
+
+  if(useSubSections){
+    // Collect Khobz items (from COIN HLOU always, plus from current category)
+    let khobzItems = products.filter(p=>p.name.startsWith('Khobz') && p.category==='COIN HLOU');
+    if(activeTab==='COIN HLOU'){
+      // Khobz already in items
+    } else {
+      // COIN MELAH: also include Khobz from COIN HLOU
+      // Add them to items if not already present
+      khobzItems.forEach(k=>{
+        if(!items.find(i=>i.name===k.name)) items.push(k);
+      });
+    }
+
+    let khobz = items.filter(p=>p.name.startsWith('Khobz'));
+    let supps = items.filter(p=>p.name.startsWith('Supp '));
+    let sandwiches = items.filter(p=>!p.name.startsWith('Khobz')&&!p.name.startsWith('Supp '));
+
+    // Apply search
+    if(q){
+      khobz = khobz.filter(p=>p.name.toLowerCase().includes(q));
+      supps = supps.filter(p=>p.name.toLowerCase().includes(q));
+      sandwiches = sandwiches.filter(p=>p.name.toLowerCase().includes(q));
+    }
+
+    let html = '';
+    if(khobz.length){
+      html += `<div class="sub-heading">Khobz</div><div class="product-grid">${khobz.map(cardHTML).join('')}</div>`;
+    }
+    if(sandwiches.length){
+      html += `<div class="sub-heading">Sandwiches</div><div class="product-grid">${sandwiches.map(cardHTML).join('')}</div>`;
+    }
+    if(supps.length){
+      html += `<div class="sub-heading">Suppl\u00e9ments</div><div class="product-grid">${supps.map(cardHTML).join('')}</div>`;
+    }
+    area.innerHTML = html || '<p style="text-align:center;color:var(--text2);padding:40px">Aucun produit trouv\u00e9</p>';
+  } else {
+    if(q) items = items.filter(p=>p.name.toLowerCase().includes(q));
+    area.innerHTML = items.length
+      ? `<div class="product-grid">${items.map(cardHTML).join('')}</div>`
+      : '<p style="text-align:center;color:var(--text2);padding:40px">Aucun produit trouv\u00e9</p>';
+  }
+}
+
+function cardHTML(p){
+  return `<div class="product-card" onclick="addToCart('${esc(p.name)}',${p.price},'${esc(p.category)}')">
+    <span class="p-name">${esc(p.name)}</span>
+    <span class="p-price">${p.price.toFixed(3)} TND</span>
+  </div>`;
+}
+function esc(s){return s.replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+
+// ---- CART ----
+function addToCart(name,price,category){
+  const existing = cart.find(c=>c.name===name);
+  if(existing) existing.qty++;
+  else cart.push({name,price,qty:1,category});
+  renderCart();
+  toast(name+' ajout\u00e9');
+}
+
+function changeQty(name,delta){
+  const item = cart.find(c=>c.name===name);
+  if(!item) return;
+  item.qty += delta;
+  if(item.qty<=0) cart = cart.filter(c=>c.name!==name);
+  renderCart();
+}
+
+function cartTotal(){
+  return cart.reduce((s,i)=>s+i.price*i.qty,0);
+}
+function cartCount(){
+  return cart.reduce((s,i)=>s+i.qty,0);
+}
+
+function renderCart(){
+  const total = cartTotal();
+  const count = cartCount();
+  const itemsHTML = cart.length===0
+    ? '<div class="cart-empty">Panier vide</div>'
+    : cart.map(i=>`<div class="cart-item">
+        <span class="ci-name">${i.name}</span>
+        <div class="qty-ctrl">
+          <button onclick="changeQty('${esc(i.name)}',-1)">&minus;</button>
+          <span>${i.qty}</span>
+          <button onclick="changeQty('${esc(i.name)}',1)">+</button>
+        </div>
+        <span class="ci-price">${(i.price*i.qty).toFixed(3)}</span>
+      </div>`).join('');
+
+  // Desktop
+  document.getElementById('cart-items-desk').innerHTML = itemsHTML;
+  document.getElementById('cart-total-desk').textContent = total.toFixed(3)+' TND';
+  document.getElementById('cart-count-desk').textContent = count+' article'+(count!==1?'s':'');
+
+  // Mobile
+  document.getElementById('cart-items-mob').innerHTML = itemsHTML;
+  document.getElementById('cart-total-mob').textContent = total.toFixed(3)+' TND';
+  document.getElementById('cart-count-mob').textContent = count+' article'+(count!==1?'s':'');
+
+  // Bottom bar
+  document.getElementById('bb-total').textContent = total.toFixed(3)+' TND';
+  const badge = document.getElementById('bb-badge');
+  if(count>0){badge.style.display='flex';badge.textContent=count;}
+  else badge.style.display='none';
+}
+
+// ---- ENCAISSER ----
+async function encaisser(){
+  if(!currentSession){toast('Ouvrez une session d\'abord');return;}
+  if(cart.length===0){toast('Panier vide');return;}
+
+  const ticket = {
+    items: cart.map(i=>({name:i.name,price:i.price,qty:i.qty,subtotal:+(i.price*i.qty).toFixed(3)})),
+    total: +cartTotal().toFixed(3),
+    session_id: currentSession.id,
+    status:'new',
+    created_at: new Date().toISOString()
+  };
+
+  const res = await apiFetch('/api/tickets',{method:'POST',body:ticket});
+  if(res){
+    toast('Ticket cr\u00e9\u00e9 #'+(res.id||'OK'));
+  } else {
+    // Save locally if offline
+    try{
+      const pending = JSON.parse(localStorage.getItem('cointahricha_pending_tickets')||'[]');
+      pending.push(ticket);
+      localStorage.setItem('cointahricha_pending_tickets',JSON.stringify(pending));
+    }catch(e){}
+    toast('Ticket enregistr\u00e9 (hors ligne)');
+  }
+
+  cart = [];
+  renderCart();
+  closeMobileCart();
+}
+
+// ---- MOBILE CART ----
+function openMobileCart(){
+  document.getElementById('cart-mobile-overlay').style.display='block';
+  const panel = document.getElementById('cart-mobile-panel');
+  panel.style.display='flex';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>panel.classList.add('open')));
+}
+function closeMobileCart(){
+  const panel = document.getElementById('cart-mobile-panel');
+  panel.classList.remove('open');
+  setTimeout(()=>{
+    panel.style.display='none';
+    document.getElementById('cart-mobile-overlay').style.display='none';
+  },300);
+}
+
+// ---- CONNECTION CHECK ----
+async function checkConnection(){
+  try{
+    const r = await fetch(API_BASE+'/api/ping',{method:'GET',signal:AbortSignal.timeout(3000)});
+    isOnline = r.ok;
+  }catch(e){
+    isOnline = false;
+  }
+  document.getElementById('conn-dot').classList.toggle('online',isOnline);
+}
+
+// ---- SEARCH ----
+document.getElementById('search-input').addEventListener('input',e=>{
+  searchQuery = e.target.value;
+  renderProducts();
+});
+
+// ---- INIT ----
+async function initApp(){
+  await loadProducts();
+  await loadSession();
+  renderTabs();
+  renderProducts();
+  renderCart();
+  checkConnection();
+  setInterval(checkConnection,5000);
+}
+
+// On load: check auth
+if(checkAuth()){
+  document.getElementById('pin-overlay').classList.add('hidden');
+  initApp();
+}
+</script>
+</body>
+</html>

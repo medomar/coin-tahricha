@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coin Ta7richa - Manager</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--accent:#ff6b35;--accent-dark:#e55a28;--bg:#f5f5f5;--card:#fff;--text:#333;--text-light:#777;--border:#ddd;--green:#27ae60;--red:#e74c3c;--blue:#3498db;--gray:#95a5a6}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+/* PIN overlay */
+#pin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center}
+#pin-overlay.hidden{display:none}
+.pin-box{background:var(--card);border-radius:16px;padding:40px;text-align:center;max-width:340px;width:90%}
+.pin-box h2{color:var(--accent);margin-bottom:8px;font-size:1.4rem}
+.pin-box p{color:var(--text-light);margin-bottom:20px;font-size:.9rem}
+.pin-dots{display:flex;gap:12px;justify-content:center;margin-bottom:24px}
+.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--accent);background:transparent;transition:background .15s}
+.pin-dot.filled{background:var(--accent)}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:240px;margin:0 auto}
+.pin-key{padding:16px;font-size:1.3rem;border:1px solid var(--border);border-radius:10px;background:var(--card);cursor:pointer;font-weight:600}
+.pin-key:active{background:var(--accent);color:#fff}
+.pin-key.wide{grid-column:span 2}
+.pin-error{color:var(--red);font-size:.85rem;margin-top:12px;min-height:20px}
+/* Header */
+header{background:var(--accent);color:#fff;padding:12px 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.header-row{display:flex;align-items:center;justify-content:space-between;max-width:900px;margin:0 auto}
+.header-row h1{font-size:1.2rem}
+.sync-badge{display:flex;align-items:center;gap:6px;font-size:.75rem;background:rgba(255,255,255,.2);padding:4px 10px;border-radius:12px}
+.sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sync-dot.online{background:#2ecc71}
+.sync-dot.offline{background:var(--gray)}
+.nav-links{display:flex;gap:8px;margin-top:6px;max-width:900px;margin-left:auto;margin-right:auto}
+.nav-links a{color:rgba(255,255,255,.85);text-decoration:none;font-size:.8rem;padding:4px 10px;border-radius:6px;background:rgba(255,255,255,.15)}
+.nav-links a:hover{background:rgba(255,255,255,.3)}
+/* Tabs */
+.tabs-bar{display:flex;background:var(--card);border-bottom:2px solid var(--border);position:sticky;top:68px;z-index:90;overflow-x:auto}
+.tab-btn{flex:1;padding:12px 8px;border:none;background:none;font-size:.85rem;font-weight:600;color:var(--text-light);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;min-width:80px}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{display:none;max-width:900px;margin:0 auto;padding:12px}
+.tab-content.active{display:block}
+/* Cards */
+.card{background:var(--card);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card h3{font-size:1rem;margin-bottom:10px;color:var(--accent)}
+/* Inputs */
+input[type=text],input[type=number],input[type=password],input[type=date],select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.9rem;margin-bottom:8px;background:var(--card)}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+/* Buttons */
+.btn{padding:10px 18px;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .2s}
+.btn:active{opacity:.8}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+.btn-blue{background:var(--blue);color:#fff}
+.btn-gray{background:var(--gray);color:#fff}
+.btn-sm{padding:6px 12px;font-size:.75rem}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
+/* Product list */
+.cat-header{background:var(--accent);color:#fff;padding:8px 14px;border-radius:8px 8px 0 0;font-weight:600;font-size:.85rem;display:flex;justify-content:space-between;margin-top:12px}
+.prod-row{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--border);border-top:none;font-size:.85rem;flex-wrap:wrap}
+.prod-row:last-child{border-radius:0 0 8px 8px}
+.prod-name{flex:1;min-width:100px;font-weight:500}
+.prod-price{font-weight:700;color:var(--accent);min-width:70px;text-align:right}
+.prod-actions{display:flex;gap:4px}
+.prod-actions button{padding:4px 8px;font-size:.7rem;border:1px solid var(--border);border-radius:6px;background:var(--card);cursor:pointer}
+.prod-actions button:hover{background:var(--bg)}
+.prod-edit-row{display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;border:1px solid var(--accent);border-top:none;background:#fff8f4}
+.prod-edit-row input,.prod-edit-row select{margin-bottom:0;flex:1;min-width:80px}
+/* Search */
+.search-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.search-row input{flex:2;min-width:150px;margin-bottom:0}
+.search-row select{flex:1;min-width:120px;margin-bottom:0}
+/* FAB */
+.fab{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:1.8rem;cursor:pointer;box-shadow:0 4px 12px rgba(255,107,53,.4);z-index:80;display:flex;align-items:center;justify-content:center}
+.fab:active{transform:scale(.95)}
+/* Add form */
+#add-form-card{display:none}
+#add-form-card.show{display:block;position:fixed;bottom:90px;right:16px;width:calc(100% - 32px);max-width:360px;z-index:85;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+/* Stats grid */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+.stat-card{background:var(--card);border-radius:10px;padding:14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.stat-value{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat-label{font-size:.7rem;color:var(--text-light);margin-top:4px}
+/* Ranking */
+.rank-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.85rem}
+.rank-item:last-child{border:none}
+.rank-num{color:var(--accent);font-weight:700;margin-right:8px}
+/* Tickets */
+.ticket-item{padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;font-size:.8rem}
+.ticket-date{color:var(--text-light);font-size:.75rem}
+.ticket-total{font-weight:700;color:var(--accent)}
+/* Settings */
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap}
+.setting-row:last-child{border:none}
+.pin-field{display:flex;align-items:center;gap:6px}
+.pin-field input{width:80px;text-align:center;letter-spacing:6px;font-size:1rem;margin:0}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center}
+.modal-overlay.hidden{display:none}
+.modal-box{background:var(--card);border-radius:12px;padding:24px;max-width:380px;width:90%}
+.modal-box h3{margin-bottom:12px}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+/* Toast */
+.toast-container{position:fixed;top:80px;right:16px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 18px;border-radius:8px;color:#fff;font-size:.85rem;font-weight:500;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+.toast.info{background:var(--blue)}
+/* Responsive */
+@media(max-width:480px){
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .prod-row{font-size:.8rem}
+  .tab-btn{font-size:.75rem;padding:10px 4px}
+}
+</style>
+</head>
+<body>
+
+<!-- PIN Overlay -->
+<div id="pin-overlay">
+  <div class="pin-box">
+    <h2>Coin Ta7richa</h2>
+    <p>Entrer le PIN Manager</p>
+    <div class="pin-dots" id="pin-dots"></div>
+    <div class="pin-keypad" id="pin-keypad"></div>
+    <div class="pin-error" id="pin-error"></div>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="header-row">
+    <h1>Manager Dashboard</h1>
+    <div class="sync-badge" id="sync-badge">
+      <span class="sync-dot offline" id="sync-dot"></span>
+      <span id="sync-text">Verification...</span>
+    </div>
+  </div>
+  <div class="nav-links">
+    <a href="index.html">Caisse (POS)</a>
+    <a href="kitchen.html">Cuisine</a>
+  </div>
+</header>
+
+<!-- Tabs -->
+<div class="tabs-bar">
+  <button class="tab-btn active" data-tab="tab-products">Produits</button>
+  <button class="tab-btn" data-tab="tab-categories">Categories</button>
+  <button class="tab-btn" data-tab="tab-sales">Ventes</button>
+  <button class="tab-btn" data-tab="tab-settings">Parametres</button>
+</div>
+
+<!-- Tab: Products -->
+<div class="tab-content active" id="tab-products">
+  <div class="search-row">
+    <input type="text" id="prod-search" placeholder="Rechercher un produit...">
+    <select id="prod-filter"><option value="">Toutes categories</option></select>
+  </div>
+  <div id="products-list"></div>
+</div>
+
+<!-- Tab: Categories -->
+<div class="tab-content" id="tab-categories">
+  <div class="card">
+    <h3>Ajouter une categorie</h3>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="new-cat-input" placeholder="Nom de la categorie" style="flex:1;margin:0">
+      <button class="btn btn-primary" onclick="addCategory()">Ajouter</button>
+    </div>
+  </div>
+  <div id="categories-list"></div>
+</div>
+
+<!-- Tab: Sales -->
+<div class="tab-content" id="tab-sales">
+  <button class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;margin-bottom:16px" onclick="exportExcel()">
+    Exporter Excel (.xlsx)
+  </button>
+  <div class="stats-grid" id="stats-grid"></div>
+  <div class="card">
+    <h3>Filtrer par date</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="date" id="date-from" style="flex:1;min-width:130px">
+      <input type="date" id="date-to" style="flex:1;min-width:130px">
+      <button class="btn btn-primary btn-sm" onclick="filterSales()">Filtrer</button>
+      <button class="btn btn-outline btn-sm" onclick="clearFilter()">Effacer</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Top 10 Produits</h3>
+    <div id="top-products"></div>
+  </div>
+  <div class="card">
+    <h3>Tickets</h3>
+    <div id="tickets-list"></div>
+  </div>
+  <div class="card">
+    <h3>Exporter</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-blue btn-sm" onclick="exportJSON('products')">Produits JSON</button>
+      <button class="btn btn-blue btn-sm" onclick="exportJSON('tickets')">Tickets JSON</button>
+      <button class="btn btn-blue btn-sm" onclick="exportJSON('backup')">Backup JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab: Settings -->
+<div class="tab-content" id="tab-settings">
+  <div class="card">
+    <h3>Gestion des PIN</h3>
+    <div class="setting-row">
+      <span>PIN Manager</span>
+      <div class="pin-field">
+        <input type="password" id="pin-manager" maxlength="4" value="" placeholder="****">
+        <button class="btn btn-sm btn-outline" onclick="togglePinVis('pin-manager',this)">Voir</button>
+        <button class="btn btn-sm btn-primary" onclick="changePin('manager')">Changer</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>PIN Caisse</span>
+      <div class="pin-field">
+        <input type="password" id="pin-caisse" maxlength="4" value="" placeholder="****">
+        <button class="btn btn-sm btn-outline" onclick="togglePinVis('pin-caisse',this)">Voir</button>
+        <button class="btn btn-sm btn-primary" onclick="changePin('caisse')">Changer</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>PIN Cuisine</span>
+      <div class="pin-field">
+        <input type="password" id="pin-cuisine" maxlength="4" value="" placeholder="****">
+        <button class="btn btn-sm btn-outline" onclick="togglePinVis('pin-cuisine',this)">Voir</button>
+        <button class="btn btn-sm btn-primary" onclick="changePin('cuisine')">Changer</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Session</h3>
+    <button class="btn btn-red" onclick="logout()" style="width:100%">Deconnexion</button>
+  </div>
+  <div class="card">
+    <h3>Import / Export</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn btn-blue btn-sm" onclick="exportJSON('products')">Produits JSON</button>
+      <button class="btn btn-blue btn-sm" onclick="exportJSON('tickets')">Tickets JSON</button>
+      <button class="btn btn-blue btn-sm" onclick="exportJSON('backup')">Backup complet</button>
+    </div>
+    <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:6px">Importer un backup (.json)</label>
+    <input type="file" id="import-file" accept=".json" style="margin-bottom:8px">
+    <button class="btn btn-primary btn-sm" onclick="importBackup()">Importer</button>
+  </div>
+  <div class="card">
+    <h3>Reinitialiser</h3>
+    <button class="btn btn-red" onclick="resetProducts()">Remettre les produits par defaut</button>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab-add" onclick="toggleAddForm()">+</button>
+
+<!-- Add product form -->
+<div class="card" id="add-form-card">
+  <h3>Nouveau produit</h3>
+  <input type="text" id="add-name" placeholder="Nom du produit">
+  <input type="number" id="add-price" placeholder="Prix (TND)" step="0.001" min="0">
+  <select id="add-cat"></select>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="btn btn-primary" style="flex:1" onclick="addProduct()">Ajouter</button>
+    <button class="btn btn-outline" onclick="toggleAddForm()">Annuler</button>
+  </div>
+</div>
+
+<!-- Change PIN Modal -->
+<div class="modal-overlay hidden" id="modal-pin">
+  <div class="modal-box">
+    <h3>Changer le PIN Manager</h3>
+    <label style="font-size:.85rem">PIN actuel</label>
+    <input type="password" id="modal-pin-current" maxlength="4" placeholder="****">
+    <label style="font-size:.85rem">Nouveau PIN</label>
+    <input type="password" id="modal-pin-new" maxlength="4" placeholder="****">
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-pin')">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmChangeManagerPin()">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div class="modal-overlay hidden" id="modal-delete">
+  <div class="modal-box">
+    <h3>Confirmer la suppression</h3>
+    <p id="modal-delete-msg"></p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-delete')">Annuler</button>
+      <button class="btn btn-red" id="modal-delete-btn">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ===== API URL Auto-detect =====
+(function(){
+  const params = new URLSearchParams(location.search);
+  if(params.get('api')){
+    localStorage.setItem('api_base', params.get('api').replace(/\/$/,''));
+  }
+  if(params.get('reset')==='true'){
+    ['cointahricha_products','cointahricha_tickets','cointahricha_manager_pin','cointahricha_caisse_pin','cointahricha_cuisine_pin'].forEach(k=>localStorage.removeItem(k));
+    location.href = location.pathname;
+  }
+})();
+const API_BASE = localStorage.getItem('api_base') || '';
+
+// ===== Default Products =====
+const DEFAULT_PRODUCTS = [
+  {name:"Sahfa Dro3",category:"COIN DRO3",price:2.0},
+  {name:"Sahfa Yawmiya",category:"COIN DRO3",price:3.0},
+  {name:"Sahfa Mshakhshkha",category:"COIN DRO3",price:6.0},
+  {name:"Sahfa Mahmula",category:"COIN DRO3",price:0.8},
+  {name:"Thon",category:"COIN MELAH",price:3.9},
+  {name:"Salami",category:"COIN MELAH",price:2.5},
+  {name:"Jambon",category:"COIN MELAH",price:2.7},
+  {name:"Salami Hsan",category:"COIN MELAH",price:4.0},
+  {name:"Supp Thon",category:"COIN MELAH",price:2.5},
+  {name:"Supp Salami",category:"COIN MELAH",price:1.5},
+  {name:"Supp Jambon",category:"COIN MELAH",price:1.5},
+  {name:"Supp Salami Hsan",category:"COIN MELAH",price:3.0},
+  {name:"Supp Ricotta",category:"COIN MELAH",price:1.0},
+  {name:"Supp Gruyere",category:"COIN MELAH",price:2.5},
+  {name:"Supp Fromage Triangle",category:"COIN MELAH",price:0.6},
+  {name:"Supp Adma",category:"COIN MELAH",price:0.5},
+  {name:"Khobz Mlawi",category:"COIN HLOU",price:0.6},
+  {name:"Khobz Tabuna",category:"COIN HLOU",price:0.6},
+  {name:"Zbeda/Ma3jun/Shamiya",category:"COIN HLOU",price:1.8},
+  {name:"Zbeda + Ma3jun/Shamiya",category:"COIN HLOU",price:2.1},
+  {name:"Ma3jun + Shamiya",category:"COIN HLOU",price:2.1},
+  {name:"Zbeda + Ma3jun + Shamiya",category:"COIN HLOU",price:2.4},
+  {name:"Ricotta",category:"COIN HLOU",price:2.1},
+  {name:"Ricotta + Zbeda/Ma3jun/Shamiya",category:"COIN HLOU",price:2.4},
+  {name:"Ricotta + Zbeda + Ma3jun/Shamiya",category:"COIN HLOU",price:2.7},
+  {name:"Ricotta + Ma3jun + Shamiya",category:"COIN HLOU",price:2.7},
+  {name:"Ricotta + Zbeda + Ma3jun + Shamiya",category:"COIN HLOU",price:3.0},
+  {name:"Douza Chocolat",category:"COIN HLOU",price:0.8},
+  {name:"Douza Asal",category:"COIN HLOU",price:0.5},
+  {name:"Zbeda Arbi",category:"COIN HLOU",price:0.5}
+];
+
+// ===== State =====
+let products = [];
+let tickets = [];
+let isOnline = false;
+let editingIdx = -1;
+let filteredTickets = null;
+
+// ===== PIN System =====
+const PIN_KEYS = {manager:'cointahricha_manager_pin',caisse:'cointahricha_caisse_pin',cuisine:'cointahricha_cuisine_pin'};
+const AUTH_KEY = 'cointahricha_manager_auth';
+const AUTH_TTL = 30*60*1000; // 30 minutes
+
+function getPin(role){return localStorage.getItem(PIN_KEYS[role])||'1234'}
+function setPin(role,val){localStorage.setItem(PIN_KEYS[role],val)}
+
+function checkAuth(){
+  const raw = sessionStorage.getItem(AUTH_KEY);
+  if(!raw) return false;
+  try{
+    const d=JSON.parse(raw);
+    if(Date.now()-d.ts < AUTH_TTL) return true;
+  }catch(e){}
+  sessionStorage.removeItem(AUTH_KEY);
+  return false;
+}
+function grantAuth(){sessionStorage.setItem(AUTH_KEY,JSON.stringify({ts:Date.now()}))}
+
+// PIN pad
+let pinEntry='';
+function initPinPad(){
+  if(checkAuth()){document.getElementById('pin-overlay').classList.add('hidden');init();return}
+  const dotsEl=document.getElementById('pin-dots');
+  dotsEl.innerHTML='';
+  for(let i=0;i<4;i++){const d=document.createElement('div');d.className='pin-dot';dotsEl.appendChild(d)}
+  const pad=document.getElementById('pin-keypad');
+  pad.innerHTML='';
+  for(let n=1;n<=9;n++){const b=document.createElement('button');b.className='pin-key';b.textContent=n;b.onclick=()=>pinPress(String(n));pad.appendChild(b)}
+  const bDel=document.createElement('button');bDel.className='pin-key';bDel.textContent='\u2190';bDel.onclick=pinDel;pad.appendChild(bDel);
+  const b0=document.createElement('button');b0.className='pin-key';b0.textContent='0';b0.onclick=()=>pinPress('0');pad.appendChild(b0);
+  const bClr=document.createElement('button');bClr.className='pin-key';bClr.textContent='C';bClr.onclick=pinClear;pad.appendChild(bClr);
+  pinEntry='';updateDots();
+}
+function pinPress(d){
+  if(pinEntry.length>=4)return;
+  pinEntry+=d;updateDots();
+  if(pinEntry.length===4){
+    if(pinEntry===String(getPin('manager'))){
+      grantAuth();
+      document.getElementById('pin-overlay').classList.add('hidden');
+      init();
+    }else{
+      document.getElementById('pin-error').textContent='PIN incorrect';
+      setTimeout(()=>{pinEntry='';updateDots();document.getElementById('pin-error').textContent=''},800);
+    }
+  }
+}
+function pinDel(){pinEntry=pinEntry.slice(0,-1);updateDots()}
+function pinClear(){pinEntry='';updateDots()}
+function updateDots(){
+  const dots=document.querySelectorAll('#pin-dots .pin-dot');
+  dots.forEach((d,i)=>d.classList.toggle('filled',i<pinEntry.length));
+}
+
+// ===== Toast =====
+function toast(msg,type='success'){
+  const c=document.getElementById('toast-container');
+  const t=document.createElement('div');t.className='toast '+type;t.textContent=msg;
+  c.appendChild(t);setTimeout(()=>t.remove(),3000);
+}
+
+// ===== API helpers =====
+async function apiGet(path){
+  try{
+    const r=await fetch(API_BASE+path,{signal:AbortSignal.timeout(5000)});
+    if(!r.ok)throw new Error(r.status);
+    return await r.json();
+  }catch(e){return null}
+}
+async function apiPost(path,body){
+  try{
+    const r=await fetch(API_BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(5000)});
+    if(!r.ok)throw new Error(r.status);
+    return await r.json();
+  }catch(e){return null}
+}
+async function apiPut(path,body){
+  try{
+    const r=await fetch(API_BASE+path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(5000)});
+    if(!r.ok)throw new Error(r.status);
+    return await r.json();
+  }catch(e){return null}
+}
+async function apiDelete(path){
+  try{
+    const r=await fetch(API_BASE+path,{method:'DELETE',signal:AbortSignal.timeout(5000)});
+    if(!r.ok)throw new Error(r.status);
+    return await r.json();
+  }catch(e){return null}
+}
+
+// ===== Sync indicator =====
+async function checkSync(){
+  const res = await apiGet('/api/products');
+  isOnline = !!res;
+  const dot=document.getElementById('sync-dot');
+  const txt=document.getElementById('sync-text');
+  if(isOnline){
+    dot.className='sync-dot online';txt.textContent='Connecte (serveur)';
+  }else{
+    dot.className='sync-dot offline';txt.textContent='Mode local (localStorage)';
+  }
+}
+
+// ===== Data load/save =====
+function saveLocal(key,data){localStorage.setItem('cointahricha_'+key,JSON.stringify(data))}
+function loadLocal(key){try{return JSON.parse(localStorage.getItem('cointahricha_'+key))}catch(e){return null}}
+
+async function loadProducts(){
+  const remote = await apiGet('/api/products');
+  if(remote && Array.isArray(remote)){
+    products=remote;saveLocal('products',products);
+  }else{
+    products=loadLocal('products')||JSON.parse(JSON.stringify(DEFAULT_PRODUCTS));
+  }
+  // ensure IDs
+  products.forEach((p,i)=>{if(!p.id)p.id=i+1});
+}
+async function loadTickets(){
+  const remote = await apiGet('/api/tickets');
+  if(remote && Array.isArray(remote)){
+    tickets=remote;saveLocal('tickets',tickets);
+  }else{
+    tickets=loadLocal('tickets')||[];
+  }
+}
+
+async function saveProducts(){
+  saveLocal('products',products);
+  if(isOnline){
+    await apiPost('/api/products',products);
+  }
+}
+
+// ===== Categories =====
+function getCategories(){
+  const cats=[...new Set(products.map(p=>p.category))];
+  return cats;
+}
+
+// ===== Tabs =====
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    const fab=document.getElementById('fab-add');
+    fab.style.display=btn.dataset.tab==='tab-products'?'flex':'none';
+    if(btn.dataset.tab==='tab-sales')renderSales();
+    if(btn.dataset.tab==='tab-categories')renderCategories();
+    if(btn.dataset.tab==='tab-settings')renderPinFields();
+  });
+});
+
+// ===== Render Products =====
+function renderProducts(){
+  const list=document.getElementById('products-list');
+  const search=document.getElementById('prod-search').value.toLowerCase();
+  const catFilter=document.getElementById('prod-filter').value;
+  let filtered=products.filter(p=>{
+    if(search&&!p.name.toLowerCase().includes(search))return false;
+    if(catFilter&&p.category!==catFilter)return false;
+    return true;
+  });
+  // group by category
+  const groups={};
+  filtered.forEach((p,origIdx)=>{
+    const realIdx=products.indexOf(p);
+    if(!groups[p.category])groups[p.category]=[];
+    groups[p.category].push({...p,_idx:realIdx});
+  });
+  let html='';
+  for(const cat of Object.keys(groups)){
+    const items=groups[cat];
+    html+=`<div class="cat-header"><span>${cat}</span><span>${items.length} produit${items.length>1?'s':''}</span></div>`;
+    items.forEach(p=>{
+      if(editingIdx===p._idx){
+        html+=renderEditRow(p);
+      }else{
+        html+=`<div class="prod-row">
+          <span class="prod-name">${p.name}</span>
+          <span style="color:var(--text-light);font-size:.75rem">${p.category}</span>
+          <span class="prod-price">${p.price.toFixed(3)} TND</span>
+          <div class="prod-actions">
+            <button onclick="startEdit(${p._idx})">Modifier</button>
+            <button onclick="confirmDelete(${p._idx})">Suppr</button>
+            <button onclick="moveProduct(${p._idx},-1)">\u2191</button>
+            <button onclick="moveProduct(${p._idx},1)">\u2193</button>
+          </div>
+        </div>`;
+      }
+    });
+  }
+  if(!filtered.length) html='<p style="text-align:center;color:var(--text-light);padding:20px">Aucun produit trouve</p>';
+  list.innerHTML=html;
+  // update filter dropdown
+  populateCatFilter();
+}
+
+function renderEditRow(p){
+  const cats=getCategories();
+  let catOpts=cats.map(c=>`<option value="${c}" ${c===p.category?'selected':''}>${c}</option>`).join('');
+  catOpts+=`<option value="__new__">+ Nouvelle</option>`;
+  return `<div class="prod-edit-row">
+    <input type="text" id="edit-name" value="${p.name}" style="flex:2">
+    <input type="number" id="edit-price" value="${p.price}" step="0.001" min="0" style="flex:1">
+    <select id="edit-cat" onchange="if(this.value==='__new__'){this.style.display='none';document.getElementById('edit-cat-new').style.display='block'}">${catOpts}</select>
+    <input type="text" id="edit-cat-new" placeholder="Nouvelle cat." style="display:none;flex:1">
+    <button class="btn btn-primary btn-sm" onclick="saveEdit(${p._idx})">OK</button>
+    <button class="btn btn-outline btn-sm" onclick="cancelEdit()">X</button>
+  </div>`;
+}
+
+function populateCatFilter(){
+  const sel=document.getElementById('prod-filter');
+  const current=sel.value;
+  const cats=getCategories();
+  sel.innerHTML='<option value="">Toutes categories</option>'+cats.map(c=>`<option value="${c}" ${c===current?'selected':''}>${c}</option>`).join('');
+  // also update add-cat dropdown
+  const addCat=document.getElementById('add-cat');
+  addCat.innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('')+`<option value="__new__">+ Nouvelle categorie</option>`;
+}
+
+document.getElementById('prod-search').addEventListener('input',renderProducts);
+document.getElementById('prod-filter').addEventListener('change',renderProducts);
+
+// ===== Product CRUD =====
+function startEdit(idx){editingIdx=idx;renderProducts()}
+function cancelEdit(){editingIdx=-1;renderProducts()}
+
+async function saveEdit(idx){
+  const name=document.getElementById('edit-name').value.trim();
+  let price=parseFloat(document.getElementById('edit-price').value);
+  let cat=document.getElementById('edit-cat').value;
+  const newCat=document.getElementById('edit-cat-new');
+  if(cat==='__new__'&&newCat){cat=newCat.value.trim().toUpperCase()}
+  if(!name||isNaN(price)||!cat){toast('Champs invalides','error');return}
+  products[idx].name=name;
+  products[idx].price=price;
+  products[idx].category=cat;
+  editingIdx=-1;
+  if(isOnline && products[idx].id){
+    await apiPut('/api/products/'+products[idx].id,products[idx]);
+  }
+  await saveProducts();
+  renderProducts();
+  toast('Produit modifie');
+}
+
+async function addProduct(){
+  const name=document.getElementById('add-name').value.trim();
+  let price=parseFloat(document.getElementById('add-price').value);
+  let cat=document.getElementById('add-cat').value;
+  if(cat==='__new__'){
+    cat=prompt('Nom de la nouvelle categorie:');
+    if(!cat)return;
+    cat=cat.trim().toUpperCase();
+  }
+  if(!name||isNaN(price)||!cat){toast('Champs invalides','error');return}
+  const newP={name,price,category:cat,id:Date.now()};
+  products.push(newP);
+  if(isOnline){await apiPost('/api/products',newP)}
+  await saveProducts();
+  document.getElementById('add-name').value='';
+  document.getElementById('add-price').value='';
+  toggleAddForm();
+  renderProducts();
+  toast('Produit ajoute');
+}
+
+function confirmDelete(idx){
+  document.getElementById('modal-delete-msg').textContent=`Supprimer "${products[idx].name}" ?`;
+  document.getElementById('modal-delete-btn').onclick=async()=>{
+    if(isOnline&&products[idx].id){await apiDelete('/api/products/'+products[idx].id)}
+    products.splice(idx,1);
+    await saveProducts();
+    closeModal('modal-delete');
+    renderProducts();
+    toast('Produit supprime');
+  };
+  document.getElementById('modal-delete').classList.remove('hidden');
+}
+
+async function moveProduct(idx,dir){
+  const newIdx=idx+dir;
+  if(newIdx<0||newIdx>=products.length)return;
+  [products[idx],products[newIdx]]=[products[newIdx],products[idx]];
+  await saveProducts();
+  renderProducts();
+}
+
+function toggleAddForm(){
+  const f=document.getElementById('add-form-card');
+  f.classList.toggle('show');
+  populateCatFilter();
+}
+
+// ===== Categories Tab =====
+function renderCategories(){
+  const cats=getCategories();
+  const list=document.getElementById('categories-list');
+  let html='';
+  cats.forEach(cat=>{
+    const count=products.filter(p=>p.category===cat).length;
+    html+=`<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <strong id="cat-label-${css(cat)}">${cat}</strong>
+        <span style="color:var(--text-light);font-size:.8rem;margin-left:8px">${count} produit${count>1?'s':''}</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-outline" onclick="startCatEdit('${esc(cat)}')">Renommer</button>
+        <button class="btn btn-sm btn-red" onclick="deleteCategory('${esc(cat)}',${count})" ${count>0?'disabled':''}>Supprimer</button>
+      </div>
+      <div id="cat-edit-${css(cat)}" style="display:none;width:100%;margin-top:6px">
+        <div style="display:flex;gap:6px">
+          <input type="text" id="cat-edit-input-${css(cat)}" value="${cat}" style="flex:1;margin:0">
+          <button class="btn btn-sm btn-primary" onclick="saveCatEdit('${esc(cat)}')">OK</button>
+          <button class="btn btn-sm btn-outline" onclick="cancelCatEdit('${esc(cat)}')">X</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  list.innerHTML=html;
+}
+function css(s){return s.replace(/[^a-zA-Z0-9]/g,'_')}
+function esc(s){return s.replace(/'/g,"\\'")}
+
+function addCategory(){
+  let name=document.getElementById('new-cat-input').value.trim().toUpperCase();
+  if(!name){toast('Nom requis','error');return}
+  if(getCategories().includes(name)){toast('Categorie existe deja','error');return}
+  // Add a placeholder product to create the category, then remove it
+  // Actually, categories are derived from products. Just add an empty notice.
+  // We'll just add a dummy product user can then populate
+  // Better: just notify user
+  // For now, add one placeholder
+  products.push({name:'(nouveau)',price:0,category:name,id:Date.now()});
+  saveProducts();
+  document.getElementById('new-cat-input').value='';
+  renderCategories();renderProducts();
+  toast('Categorie ajoutee');
+}
+
+function startCatEdit(cat){
+  document.getElementById('cat-edit-'+css(cat)).style.display='block';
+}
+function cancelCatEdit(cat){
+  document.getElementById('cat-edit-'+css(cat)).style.display='none';
+}
+async function saveCatEdit(oldCat){
+  const newCat=document.getElementById('cat-edit-input-'+css(oldCat)).value.trim().toUpperCase();
+  if(!newCat){toast('Nom requis','error');return}
+  products.forEach(p=>{if(p.category===oldCat)p.category=newCat});
+  await saveProducts();
+  if(isOnline){
+    // Update all products with new category
+    for(const p of products.filter(p=>p.category===newCat)){
+      if(p.id) await apiPut('/api/products/'+p.id,p);
+    }
+  }
+  renderCategories();renderProducts();
+  toast('Categorie renommee');
+}
+
+async function deleteCategory(cat,count){
+  if(count>0){toast('Categorie non vide','error');return}
+  // Category with 0 products shouldn't exist since cats are derived, but just in case
+  renderCategories();
+  toast('Categorie supprimee');
+}
+
+// ===== Sales Tab =====
+function renderSales(){
+  const tix=filteredTickets||tickets;
+  // Stats
+  const totalTND=tix.reduce((s,t)=>s+(t.total||0),0);
+  const count=tix.length;
+  const today=new Date().toISOString().slice(0,10);
+  const todayTix=tix.filter(t=>(t.date||t.timestamp||'').slice(0,10)===today);
+  const todayTND=todayTix.reduce((s,t)=>s+(t.total||0),0);
+  const weekAgo=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+  const weekTix=tix.filter(t=>(t.date||t.timestamp||'').slice(0,10)>=weekAgo);
+  const weekTND=weekTix.reduce((s,t)=>s+(t.total||0),0);
+  document.getElementById('stats-grid').innerHTML=`
+    <div class="stat-card"><div class="stat-value">${totalTND.toFixed(3)}</div><div class="stat-label">Total TND</div></div>
+    <div class="stat-card"><div class="stat-value">${count}</div><div class="stat-label">Tickets</div></div>
+    <div class="stat-card"><div class="stat-value">${todayTND.toFixed(3)}</div><div class="stat-label">Aujourd'hui</div></div>
+    <div class="stat-card"><div class="stat-value">${weekTND.toFixed(3)}</div><div class="stat-label">Cette semaine</div></div>`;
+  // Top 10
+  const prodCount={};
+  tix.forEach(t=>(t.items||[]).forEach(it=>{prodCount[it.name]=(prodCount[it.name]||0)+(it.qty||it.quantity||1)}));
+  const top=Object.entries(prodCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('top-products').innerHTML=top.length?top.map((t,i)=>`<div class="rank-item"><span><span class="rank-num">#${i+1}</span>${t[0]}</span><span>${t[1]}</span></div>`).join(''):'<p style="color:var(--text-light)">Aucune vente</p>';
+  // Tickets
+  const sorted=[...tix].sort((a,b)=>((b.date||b.timestamp||'')>(a.date||a.timestamp||'')?1:-1));
+  document.getElementById('tickets-list').innerHTML=sorted.slice(0,50).map(t=>{
+    const d=t.date||t.timestamp||'';
+    const items=(t.items||[]).map(i=>`${i.name} x${i.qty||i.quantity||1}`).join(', ');
+    return `<div class="ticket-item"><div class="ticket-date">${d}</div><div class="ticket-total">${(t.total||0).toFixed(3)} TND</div><div>${items||'--'}</div></div>`;
+  }).join('')||'<p style="color:var(--text-light)">Aucun ticket</p>';
+}
+
+function filterSales(){
+  const from=document.getElementById('date-from').value;
+  const to=document.getElementById('date-to').value;
+  filteredTickets=tickets.filter(t=>{
+    const d=(t.date||t.timestamp||'').slice(0,10);
+    if(from&&d<from)return false;
+    if(to&&d>to)return false;
+    return true;
+  });
+  renderSales();
+}
+function clearFilter(){filteredTickets=null;document.getElementById('date-from').value='';document.getElementById('date-to').value='';renderSales()}
+
+// ===== Export =====
+function exportJSON(type){
+  let data,filename;
+  if(type==='products'){data=products;filename='cointahricha_products.json'}
+  else if(type==='tickets'){data=tickets;filename='cointahricha_tickets.json'}
+  else{data={products,tickets,exported:new Date().toISOString()};filename='cointahricha_backup.json'}
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+  toast('Export termine');
+}
+
+function exportExcel(){
+  if(typeof XLSX==='undefined'){toast('SheetJS non charge','error');return}
+  const rows=[];
+  let sessionNum=0;
+  const sorted=[...(filteredTickets||tickets)].sort((a,b)=>((a.date||a.timestamp||'')>(b.date||b.timestamp||'')?1:-1));
+  let grandTotal=0;
+  sorted.forEach((t,ti)=>{
+    sessionNum=t.session||ti+1;
+    (t.items||[]).forEach(it=>{
+      const qty=it.qty||it.quantity||1;
+      const unitPrice=it.price||0;
+      const lineTotal=qty*unitPrice;
+      grandTotal+=lineTotal;
+      rows.push({
+        'Date':t.date||t.timestamp||'',
+        'Session #':sessionNum,
+        'Ticket #':ti+1,
+        'Produit':it.name||'',
+        'Quantite':qty,
+        'Prix unitaire (TND)':unitPrice.toFixed(3),
+        'Total ligne (TND)':lineTotal.toFixed(3)
+      });
+    });
+  });
+  rows.push({'Date':'','Session #':'','Ticket #':'','Produit':'TOTAL','Quantite':'','Prix unitaire (TND)':'','Total ligne (TND)':grandTotal.toFixed(3)});
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Ventes');
+  XLSX.writeFile(wb,'cointahricha_ventes.xlsx');
+  toast('Excel exporte');
+}
+
+// ===== Import =====
+function importBackup(){
+  const file=document.getElementById('import-file').files[0];
+  if(!file){toast('Aucun fichier','error');return}
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(data.products&&Array.isArray(data.products)){products=data.products;await saveProducts()}
+      if(data.tickets&&Array.isArray(data.tickets)){tickets=data.tickets;saveLocal('tickets',tickets)}
+      renderProducts();renderSales();renderCategories();
+      toast('Backup importe');
+    }catch(err){toast('Fichier invalide','error')}
+  };
+  reader.readAsText(file);
+}
+
+// ===== Reset =====
+function resetProducts(){
+  if(!confirm('Remettre tous les produits par defaut ?'))return;
+  if(!confirm('Cette action est irreversible. Confirmer ?'))return;
+  products=JSON.parse(JSON.stringify(DEFAULT_PRODUCTS));
+  saveProducts();
+  renderProducts();renderCategories();
+  toast('Produits reinitialises');
+}
+
+// ===== PIN Management =====
+function renderPinFields(){
+  document.getElementById('pin-manager').value=getPin('manager');
+  document.getElementById('pin-manager').type='password';
+  document.getElementById('pin-caisse').value=getPin('caisse');
+  document.getElementById('pin-caisse').type='password';
+  document.getElementById('pin-cuisine').value=getPin('cuisine');
+  document.getElementById('pin-cuisine').type='password';
+}
+
+function togglePinVis(id,btn){
+  const inp=document.getElementById(id);
+  if(inp.type==='password'){inp.type='text';btn.textContent='Masquer'}
+  else{inp.type='password';btn.textContent='Voir'}
+}
+
+function changePin(role){
+  if(role==='manager'){
+    document.getElementById('modal-pin-current').value='';
+    document.getElementById('modal-pin-new').value='';
+    document.getElementById('modal-pin').classList.remove('hidden');
+    return;
+  }
+  const inp=document.getElementById('pin-'+role);
+  const val=inp.value.trim();
+  if(!/^\d{4}$/.test(val)){toast('Le PIN doit etre 4 chiffres','error');return}
+  setPin(role,val);
+  toast('PIN '+role+' mis a jour');
+}
+
+function confirmChangeManagerPin(){
+  const current=document.getElementById('modal-pin-current').value.trim();
+  const newPin=document.getElementById('modal-pin-new').value.trim();
+  if(current!==String(getPin('manager'))){toast('PIN actuel incorrect','error');return}
+  if(!/^\d{4}$/.test(newPin)){toast('Le nouveau PIN doit etre 4 chiffres','error');return}
+  setPin('manager',newPin);
+  closeModal('modal-pin');
+  renderPinFields();
+  toast('PIN Manager mis a jour');
+}
+
+function logout(){
+  sessionStorage.removeItem(AUTH_KEY);
+  location.reload();
+}
+
+// ===== Modals =====
+function closeModal(id){document.getElementById(id).classList.add('hidden')}
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.add('hidden')});
+});
+
+// ===== Init =====
+async function init(){
+  await checkSync();
+  await loadProducts();
+  await loadTickets();
+  renderProducts();
+  renderPinFields();
+}
+
+// Start with PIN pad
+initPinPad();
+</script>
+</body>
+</html>
