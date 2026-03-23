@@ -428,18 +428,22 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 <div class="toast-container" id="toast-container"></div>
 
 <script>
-// ===== API URL Auto-detect =====
+// ===== Supabase Config =====
+const SUPABASE_URL = 'https://vylefxjcefuynidafaxi.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_2rZEhMBsyviUY-nsKcs4Cg_Fue-48aG';
+const SB_HEADERS = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_KEY,
+  'Content-Type': 'application/json'
+};
+
 (function(){
   const params = new URLSearchParams(location.search);
-  if(params.get('api')){
-    localStorage.setItem('api_base', params.get('api').replace(/\/$/,''));
-  }
   if(params.get('reset')==='true'){
     ['cointahricha_products','cointahricha_tickets','cointahricha_manager_pin','cointahricha_caisse_pin','cointahricha_cuisine_pin'].forEach(k=>localStorage.removeItem(k));
     location.href = location.pathname;
   }
 })();
-const API_BASE = localStorage.getItem('api_base') || (location.hostname.includes('github.io') ? 'https://coin-tahricha.onrender.com' : '');
 
 // ===== Default Products =====
 const DEFAULT_PRODUCTS = [
@@ -546,49 +550,84 @@ function toast(msg,type='success'){
   c.appendChild(t);setTimeout(()=>t.remove(),3000);
 }
 
-// ===== API helpers =====
-async function apiGet(path){
+// ===== Supabase REST helpers =====
+// items field is TEXT in DB — stringify on write, parse on read
+function sbParseItems(row){
+  if(row && typeof row.items === 'string'){
+    try{row.items=JSON.parse(row.items)}catch(e){row.items=[]}
+  }
+  return row;
+}
+function sbStringifyItems(body){
+  const copy={...body};
+  if(copy.items && typeof copy.items !== 'string'){
+    copy.items=JSON.stringify(copy.items);
+  }
+  return copy;
+}
+
+async function sbGet(table, query=''){
   try{
-    const r=await fetch(API_BASE+path,{signal:AbortSignal.timeout(5000)});
+    const r=await fetch(SUPABASE_URL+'/rest/v1/'+table+(query?'?'+query:''),{
+      headers:SB_HEADERS,signal:AbortSignal.timeout(5000)
+    });
     if(!r.ok)throw new Error(r.status);
-    return await r.json();
+    const data=await r.json();
+    if(Array.isArray(data)) data.forEach(sbParseItems);
+    return data;
   }catch(e){return null}
 }
-async function apiPost(path,body){
+async function sbPost(table, body){
   try{
-    const r=await fetch(API_BASE+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(5000)});
+    const payload=Array.isArray(body)?body.map(sbStringifyItems):sbStringifyItems(body);
+    const r=await fetch(SUPABASE_URL+'/rest/v1/'+table,{
+      method:'POST',
+      headers:{...SB_HEADERS,'Prefer':'return=representation'},
+      body:JSON.stringify(payload),signal:AbortSignal.timeout(10000)
+    });
     if(!r.ok)throw new Error(r.status);
-    return await r.json();
+    const data=await r.json();
+    if(Array.isArray(data)) data.forEach(sbParseItems);
+    return data;
   }catch(e){return null}
 }
-async function apiPut(path,body){
+async function sbPatch(table, eqField, eqVal, body){
   try{
-    const r=await fetch(API_BASE+path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(5000)});
+    const r=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?'+eqField+'=eq.'+eqVal,{
+      method:'PATCH',
+      headers:{...SB_HEADERS,'Prefer':'return=representation'},
+      body:JSON.stringify(sbStringifyItems(body)),signal:AbortSignal.timeout(5000)
+    });
     if(!r.ok)throw new Error(r.status);
-    return await r.json();
+    const data=await r.json();
+    if(Array.isArray(data)) data.forEach(sbParseItems);
+    return data;
   }catch(e){return null}
 }
-async function apiDelete(path){
+async function sbDelete(table, eqField, eqVal){
   try{
-    const r=await fetch(API_BASE+path,{method:'DELETE',signal:AbortSignal.timeout(5000)});
+    const r=await fetch(SUPABASE_URL+'/rest/v1/'+table+'?'+eqField+'=eq.'+eqVal,{
+      method:'DELETE',
+      headers:SB_HEADERS,signal:AbortSignal.timeout(5000)
+    });
     if(!r.ok)throw new Error(r.status);
-    return await r.json();
+    return true;
   }catch(e){return null}
 }
 
 // ===== Sync indicator =====
 async function checkSync(){
-  const res = await apiGet('/api/products');
+  const res = await sbGet('products','select=id&limit=1');
   const prevOnline = isOnline;
   isOnline = !!res;
   const dot=document.getElementById('sync-dot');
   const txt=document.getElementById('sync-text');
   if(isOnline){
-    dot.className='sync-dot online';txt.textContent='Connecte (serveur)';
+    dot.className='sync-dot online';txt.textContent='Connecte (Supabase)';
   }else{
     dot.className='sync-dot offline';txt.textContent='Mode local (localStorage)';
   }
-  // Detect offline→online transition and sync data
+  // Detect offline->online transition and sync data
   if(isOnline && wasOnline && !prevOnline){
     await syncFromServer();
   }
@@ -613,7 +652,7 @@ function saveLocal(key,data){localStorage.setItem('cointahricha_'+key,JSON.strin
 function loadLocal(key){try{return JSON.parse(localStorage.getItem('cointahricha_'+key))}catch(e){return null}}
 
 async function loadProducts(){
-  const remote = await apiGet('/api/products');
+  const remote = await sbGet('products','order=id.asc');
   if(remote && Array.isArray(remote)){
     products=remote;saveLocal('products',products);
   }else{
@@ -623,7 +662,7 @@ async function loadProducts(){
   products.forEach((p,i)=>{if(!p.id)p.id=i+1});
 }
 async function loadTickets(){
-  const remote = await apiGet('/api/tickets');
+  const remote = await sbGet('tickets','order=id.desc');
   if(remote && Array.isArray(remote)){
     tickets=remote;saveLocal('tickets',tickets);
   }else{
@@ -633,9 +672,7 @@ async function loadTickets(){
 
 async function saveProducts(){
   saveLocal('products',products);
-  if(isOnline){
-    await apiPost('/api/products',products);
-  }
+  // Note: individual CRUD ops handle Supabase writes; this just persists to localStorage
 }
 
 // ===== Categories =====
@@ -747,7 +784,7 @@ async function saveEdit(idx){
   products[idx].category=cat;
   editingIdx=-1;
   if(isOnline && products[idx].id){
-    await apiPut('/api/products/'+products[idx].id,products[idx]);
+    await sbPatch('products','id',products[idx].id,{name,price,category:cat});
   }
   await saveProducts();
   renderProducts();
@@ -764,9 +801,12 @@ async function addProduct(){
     cat=cat.trim().toUpperCase();
   }
   if(!name||isNaN(price)||!cat){toast('Champs invalides','error');return}
-  const newP={name,price,category:cat,id:Date.now()};
+  const newP={name,price,category:cat};
+  if(isOnline){
+    const res=await sbPost('products',newP);
+    if(res&&res.length>0){newP.id=res[0].id}else{newP.id=Date.now()}
+  }else{newP.id=Date.now()}
   products.push(newP);
-  if(isOnline){await apiPost('/api/products',newP)}
   await saveProducts();
   document.getElementById('add-name').value='';
   document.getElementById('add-price').value='';
@@ -778,7 +818,7 @@ async function addProduct(){
 function confirmDelete(idx){
   document.getElementById('modal-delete-msg').textContent=`Supprimer "${products[idx].name}" ?`;
   document.getElementById('modal-delete-btn').onclick=async()=>{
-    if(isOnline&&products[idx].id){await apiDelete('/api/products/'+products[idx].id)}
+    if(isOnline&&products[idx].id){await sbDelete('products','id',products[idx].id)}
     products.splice(idx,1);
     await saveProducts();
     closeModal('modal-delete');
@@ -862,7 +902,7 @@ async function saveCatEdit(oldCat){
   if(isOnline){
     // Update all products with new category
     for(const p of products.filter(p=>p.category===newCat)){
-      if(p.id) await apiPut('/api/products/'+p.id,p);
+      if(p.id) await sbPatch('products','id',p.id,{category:newCat});
     }
   }
   renderCategories();renderProducts();
@@ -988,7 +1028,7 @@ function confirmDeleteTicket(ticketId){
   if(!t)return;
   document.getElementById('modal-delete-ticket-msg').textContent=`Supprimer le ticket #${ticketId} (${(t.total||0).toFixed(3)} TND) ?`;
   document.getElementById('modal-delete-ticket-btn').onclick=async()=>{
-    if(isOnline){await apiDelete('/api/tickets/'+ticketId)}
+    if(isOnline){await sbDelete('tickets','id',ticketId)}
     tickets=tickets.filter(tk=>tk.id!==ticketId);
     saveLocal('tickets',tickets);
     if(filteredTickets){filteredTickets=filteredTickets.filter(tk=>tk.id!==ticketId)}
@@ -1164,7 +1204,7 @@ async function saveEditedTicket(){
     tickets[idx].status=editTicketData.status;
   }
   if(isOnline){
-    await apiPut('/api/tickets/'+ticketId,{
+    await sbPatch('tickets','id',ticketId,{
       items:editTicketData.items,
       total:editTicketData.total,
       status:editTicketData.status
@@ -1295,22 +1335,30 @@ function importBackup(){
 
 async function importTicketsToAPI(ticketArray){
   if(isOnline){
-    // Send in batches of 50 for progress tracking
+    // Fetch existing tickets for duplicate detection
+    updateImportProgress(35,'Chargement des tickets existants...');
+    const existing=await sbGet('tickets','select=session_id,created_at,total')||[];
+    const existingKeys=new Set(existing.map(t=>`${t.session_id}|${t.created_at}|${t.total}`));
+    // Filter out duplicates
+    const toImport=[];
+    let totalSkipped=0;
+    ticketArray.forEach(t=>{
+      const key=`${t.session_id}|${t.created_at}|${t.total}`;
+      if(existingKeys.has(key)){totalSkipped++;return}
+      existingKeys.add(key);
+      // Remove id so Supabase auto-generates
+      const copy={...t};delete copy.id;
+      toImport.push(copy);
+    });
+    // Insert in batches of 50
     const batchSize=50;
-    let totalImported=0, totalSkipped=0;
-    for(let i=0;i<ticketArray.length;i+=batchSize){
-      const batch=ticketArray.slice(i,i+batchSize);
-      const pct=30+Math.round((i/ticketArray.length)*60);
-      updateImportProgress(pct,`Import en cours: ${i}/${ticketArray.length} tickets...`);
-      const res=await fetch(API_BASE+'/api/tickets/import',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(batch)
-      });
-      if(!res.ok) throw new Error('Import API error '+res.status);
-      const result=await res.json();
-      totalImported+=result.imported||0;
-      totalSkipped+=result.skipped||0;
+    let totalImported=0;
+    for(let i=0;i<toImport.length;i+=batchSize){
+      const batch=toImport.slice(i,i+batchSize);
+      const pct=40+Math.round((i/Math.max(toImport.length,1))*50);
+      updateImportProgress(pct,`Import en cours: ${i}/${toImport.length} tickets...`);
+      const res=await sbPost('tickets',batch);
+      if(res) totalImported+=res.length;
     }
     return {imported:totalImported, skipped:totalSkipped, total:ticketArray.length};
   } else {
@@ -1334,10 +1382,23 @@ async function importTicketsToAPI(ticketArray){
 }
 
 // ===== Reset =====
-function resetProducts(){
+async function resetProducts(){
   if(!confirm('Remettre tous les produits par defaut ?'))return;
   if(!confirm('Cette action est irreversible. Confirmer ?'))return;
-  products=JSON.parse(JSON.stringify(DEFAULT_PRODUCTS));
+  if(isOnline){
+    // Delete all products from Supabase (id > 0 matches all)
+    try{
+      await fetch(SUPABASE_URL+'/rest/v1/products?id=gt.0',{
+        method:'DELETE',headers:SB_HEADERS,signal:AbortSignal.timeout(10000)
+      });
+    }catch(e){}
+    // Insert defaults
+    const res=await sbPost('products',DEFAULT_PRODUCTS.map(p=>({name:p.name,price:p.price,category:p.category})));
+    if(res&&Array.isArray(res)){products=res}
+    else{products=JSON.parse(JSON.stringify(DEFAULT_PRODUCTS))}
+  }else{
+    products=JSON.parse(JSON.stringify(DEFAULT_PRODUCTS));
+  }
   saveProducts();
   renderProducts();renderCategories();
   toast('Produits reinitialises');

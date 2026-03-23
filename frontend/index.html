@@ -330,54 +330,41 @@ const CATEGORIES = ["COIN DRO3","COIN MELAH","COIN HLOU"];
 const LS = {
   pin:'cointahricha_caisse_pin',
   auth:'cointahricha_caisse_auth',
-  api:'api_base',
   products:'cointahricha_products',
   session:'cointahricha_session'
 };
 const AUTH_TTL = 8*60*60*1000; // 8 hours
 
-// ---- API URL AUTO-DETECTION ----
-function detectApi(){
+// ---- SUPABASE CONFIG ----
+const SUPABASE_URL = 'https://vylefxjcefuynidafaxi.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_2rZEhMBsyviUY-nsKcs4Cg_Fue-48aG';
+
+// Handle ?reset=true parameter
+(function(){
   const params = new URLSearchParams(location.search);
   if(params.get('reset')==='true'){
     localStorage.removeItem(LS.products);
     localStorage.removeItem(LS.session);
-    localStorage.removeItem(LS.api);
     toast('Donn\u00e9es r\u00e9initialis\u00e9es');
-    // remove param from URL
     const url = new URL(location.href);
     url.searchParams.delete('reset');
     history.replaceState(null,'',url);
   }
-  if(params.get('api')){
-    const apiUrl = params.get('api').replace(/\/$/,'');
-    localStorage.setItem(LS.api, apiUrl);
-    // clean URL
-    const url = new URL(location.href);
-    url.searchParams.delete('api');
-    history.replaceState(null,'',url);
-    return apiUrl;
-  }
-  if(localStorage.getItem(LS.api)){
-    return localStorage.getItem(LS.api);
-  }
-  // If on GitHub Pages or other external host, use the Render API
-  if(location.hostname.includes('github.io')){
-    return 'https://coin-tahricha.onrender.com';
-  }
-  // Same-origin: use relative URL (works on Render where frontend+backend share origin)
-  return '';
-}
+})();
 
-let API_BASE = detectApi();
-
-async function apiFetch(path, opts={}){
-  const url = API_BASE + path;
+async function sbFetch(path, opts={}){
+  const url = SUPABASE_URL + '/rest/v1' + path;
   try{
+    const headers = {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer '+SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...(opts.headers||{})
+    };
     const r = await fetch(url, {
       ...opts,
-      headers:{'Content-Type':'application/json',...(opts.headers||{})},
-      body: opts.body ? JSON.stringify(opts.body) : undefined
+      headers,
+      body: opts.body ? (typeof opts.body==='string' ? opts.body : JSON.stringify(opts.body)) : undefined
     });
     if(!r.ok) throw new Error(r.status);
     return await r.json();
@@ -444,8 +431,8 @@ let isOnline = false;
 
 // ---- PRODUCTS LOADING ----
 async function loadProducts(){
-  // Try API
-  const data = await apiFetch('/api/products');
+  // Try Supabase
+  const data = await sbFetch('/products');
   if(data && Array.isArray(data) && data.length>0){
     products = data;
     localStorage.setItem(LS.products, JSON.stringify(products));
@@ -473,15 +460,17 @@ async function loadSession(){
 async function toggleSession(){
   if(currentSession){
     // Close session
-    await apiFetch('/api/sessions/'+currentSession.id, {method:'PUT', body:{status:'closed', closed_at:new Date().toISOString()}});
+    await sbFetch('/sessions?id=eq.'+currentSession.id, {method:'PATCH', headers:{'Prefer':'return=representation'}, body:{status:'closed', closed_at:new Date().toISOString()}});
     currentSession = null;
     localStorage.removeItem(LS.session);
     toast('Session ferm\u00e9e');
   } else {
     // Open session
     const body = {status:'open', opened_at:new Date().toISOString()};
-    const res = await apiFetch('/api/sessions',{method:'POST',body});
-    if(res && res.id){
+    const res = await sbFetch('/sessions',{method:'POST', headers:{'Prefer':'return=representation'}, body});
+    if(res && Array.isArray(res) && res[0] && res[0].id){
+      currentSession = res[0];
+    } else if(res && res.id){
       currentSession = res;
     } else {
       // Offline fallback
@@ -746,8 +735,12 @@ async function encaisser(){
   };
 
   let ticketId = null;
-  const res = await apiFetch('/api/tickets',{method:'POST',body:ticket});
-  if(res){
+  // items is stored as TEXT in Supabase — stringify it
+  const sbTicket = {...ticket, items: JSON.stringify(ticket.items)};
+  const res = await sbFetch('/tickets',{method:'POST', headers:{'Prefer':'return=representation'}, body:sbTicket});
+  if(res && Array.isArray(res) && res[0]){
+    ticketId = res[0].id||null;
+  } else if(res && res.id){
     ticketId = res.id||null;
   } else {
     // Save locally if offline
@@ -885,7 +878,8 @@ async function syncPendingTickets(){
   const remaining = [];
 
   for(const ticket of pending){
-    const res = await apiFetch('/api/tickets',{method:'POST',body:ticket});
+    const sbTicket = {...ticket, items: typeof ticket.items==='string' ? ticket.items : JSON.stringify(ticket.items)};
+    const res = await sbFetch('/tickets',{method:'POST', headers:{'Prefer':'return=representation'}, body:sbTicket});
     if(res){
       synced++;
     } else {
@@ -903,7 +897,11 @@ async function syncPendingTickets(){
 let wasOnline = false;
 async function checkConnection(){
   try{
-    const r = await fetch(API_BASE+'/api/ping',{method:'GET',signal:AbortSignal.timeout(3000)});
+    const r = await fetch(SUPABASE_URL+'/rest/v1/products?select=id&limit=1',{
+      method:'GET',
+      headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY},
+      signal:AbortSignal.timeout(3000)
+    });
     isOnline = r.ok;
   }catch(e){
     isOnline = false;

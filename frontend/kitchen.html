@@ -247,53 +247,51 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
 
 <script>
 // ===========================
-// API HELPERS
+// SUPABASE CONFIG & API HELPERS
 // ===========================
-var API_BASE = (function() {
-  var params = new URLSearchParams(window.location.search);
-  var api = params.get('api');
-  if (api) {
-    localStorage.setItem('api_base', api);
-    return api;
-  }
-  var stored = localStorage.getItem('api_base');
-  if (stored) return stored;
-  // If on GitHub Pages, use the Render API
-  if (window.location.hostname.indexOf('github.io') !== -1) {
-    return 'https://coin-tahricha.onrender.com';
-  }
-  return '';
-})();
+var SUPABASE_URL = 'https://vylefxjcefuynidafaxi.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_2rZEhMBsyviUY-nsKcs4Cg_Fue-48aG';
 var _online = false;
 
-function apiGet(path) {
-  return fetch(API_BASE + '/api' + path, {signal: AbortSignal.timeout(5000)})
-    .then(function(res) {
-      if (!res.ok) throw new Error('API ' + res.status);
-      return res.json();
-    });
+var _supaHeaders = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': 'Bearer ' + SUPABASE_KEY,
+  'Content-Type': 'application/json'
+};
+
+// Parse items field from TEXT (JSON string) to array if needed
+function parseTicketItems(ticket) {
+  if (ticket && typeof ticket.items === 'string') {
+    try { ticket.items = JSON.parse(ticket.items); } catch (e) { ticket.items = []; }
+  }
+  return ticket;
 }
 
-function apiPut(path, body) {
-  return fetch(API_BASE + '/api' + path, {
-    method: 'PUT',
-    headers: {'Content-Type': 'application/json'},
+function supaGet(path, opts) {
+  opts = opts || {};
+  return fetch(SUPABASE_URL + '/rest/v1' + path, {
+    headers: _supaHeaders,
+    signal: opts.signal || AbortSignal.timeout(5000)
+  }).then(function(res) {
+    if (!res.ok) throw new Error('API ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    if (Array.isArray(data)) data.forEach(parseTicketItems);
+    return data;
+  });
+}
+
+function supaPatch(path, body) {
+  return fetch(SUPABASE_URL + '/rest/v1' + path, {
+    method: 'PATCH',
+    headers: Object.assign({}, _supaHeaders, {'Prefer': 'return=representation'}),
     body: JSON.stringify(body)
   }).then(function(res) {
     if (!res.ok) throw new Error('API ' + res.status);
     return res.json();
-  });
-}
-
-function apiPost(path, body) {
-  return fetch(API_BASE + '/api' + path, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(5000)
-  }).then(function(res) {
-    if (!res.ok) throw new Error('API ' + res.status);
-    return res.json();
+  }).then(function(data) {
+    if (Array.isArray(data)) data.forEach(parseTicketItems);
+    return data;
   });
 }
 
@@ -314,7 +312,7 @@ var _wasOnline = false;
 var _onReconnectCallbacks = [];
 
 function checkPing() {
-  fetch(API_BASE + '/api/ping', {method: 'GET', signal: AbortSignal.timeout(3000)})
+  fetch(SUPABASE_URL + '/rest/v1/products?select=id&limit=1', {method: 'GET', headers: _supaHeaders, signal: AbortSignal.timeout(3000)})
     .then(function(res) {
       var nowOnline = res.ok;
       var justReconnected = nowOnline && !_wasOnline && _wasOnline !== undefined;
@@ -335,16 +333,10 @@ checkPing();
 // --- Data reset mechanism (?reset=true) ---
 (function() {
   if (new URLSearchParams(window.location.search).get('reset') === 'true') {
-    ['cointahricha_caisse_pin', 'cointahricha_cuisine_pin'].forEach(function(k) {
+    ['cointahricha_caisse_pin', 'cointahricha_cuisine_pin', 'cointahricha_products', 'pos_tickets', 'pos_sessions', 'cointahricha_manager_pin'].forEach(function(k) {
       localStorage.removeItem(k);
     });
-    apiPost('/products/reset').catch(function() {
-      ['cointahricha_products', 'pos_tickets', 'pos_sessions', 'cointahricha_manager_pin'].forEach(function(k) {
-        localStorage.removeItem(k);
-      });
-    }).then(function() {
-      window.location.replace(window.location.pathname);
-    });
+    window.location.replace(window.location.pathname);
     return;
   }
 })();
@@ -589,7 +581,7 @@ function initApp() {
         return;
       }
       var item = remaining.shift();
-      apiPut('/tickets/' + item.id, {status: item.status}).then(function() {
+      supaPatch('/tickets?id=eq.' + item.id, {status: item.status}).then(function() {
         synced++;
         next();
       }).catch(function() {
@@ -607,7 +599,7 @@ function initApp() {
   // ── Update ticket status via API with localStorage fallback ──
   function updateTicketStatus(ticketId, newStatus) {
     if (_online) {
-      apiPut('/tickets/' + ticketId, {status: newStatus}).catch(function() {
+      supaPatch('/tickets?id=eq.' + ticketId, {status: newStatus}).catch(function() {
         // API call failed, queue for later sync
         savePendingUpdate(ticketId, newStatus);
         // Also update localStorage for local consistency
@@ -767,7 +759,7 @@ function initApp() {
   // ── Poll tickets from API (with localStorage fallback) ──
   function pollTickets() {
     if (_online) {
-      apiGet('/tickets?status=new,en_preparation,preparing').then(function(tickets) {
+      supaGet('/tickets?status=in.(new,en_preparation,preparing)').then(function(tickets) {
         var sig = buildSignature(tickets);
         var hasNew = false;
         tickets.forEach(function(t) {
@@ -876,10 +868,8 @@ function initApp() {
   // ── Load done orders from API on init ──
   function loadDoneOrders() {
     if (!_online) return;
-    apiGet('/tickets?status=done').then(function(tickets) {
-      // Sort by created_at descending, take last 20
-      tickets.sort(function(a, b) { return new Date(b.created_at) - new Date(a.created_at); });
-      tickets.slice(0, DONE_MAX).forEach(function(t) {
+    supaGet('/tickets?status=eq.done&order=id.desc&limit=20').then(function(tickets) {
+      tickets.forEach(function(t) {
         // Only add if not already in doneOrders
         var exists = doneOrders.some(function(d) { return String(d.id) === String(t.id); });
         if (!exists) {
