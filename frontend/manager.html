@@ -825,13 +825,61 @@ function importBackup(){
   reader.onload=async(e)=>{
     try{
       const data=JSON.parse(e.target.result);
-      if(data.products&&Array.isArray(data.products)){products=data.products;await saveProducts()}
-      if(data.tickets&&Array.isArray(data.tickets)){tickets=data.tickets;saveLocal('tickets',tickets)}
-      renderProducts();renderSales();renderCategories();
-      toast('Backup importe');
-    }catch(err){toast('Fichier invalide','error')}
+      let importedProducts=false, importedTickets=false;
+
+      // Detect format: flat ticket array [...] or backup object {products, tickets}
+      if(Array.isArray(data)){
+        // Flat array — detect if products or tickets by checking fields
+        if(data.length>0 && data[0].items!==undefined){
+          // Ticket array
+          await importTicketsToAPI(data);
+          importedTickets=true;
+        } else if(data.length>0 && data[0].category!==undefined){
+          // Product array
+          products=data;await saveProducts();
+          importedProducts=true;
+        }
+      } else {
+        // Backup object format
+        if(data.products&&Array.isArray(data.products)){products=data.products;await saveProducts();importedProducts=true}
+        if(data.tickets&&Array.isArray(data.tickets)){
+          await importTicketsToAPI(data.tickets);
+          importedTickets=true;
+        }
+      }
+
+      if(importedProducts||importedTickets){
+        await loadTickets();
+        renderProducts();renderSales();renderCategories();
+        let msg='Import: ';
+        if(importedProducts) msg+='produits ';
+        if(importedTickets) msg+='tickets ';
+        toast(msg+'OK');
+      } else {
+        toast('Aucune donnee reconnue','error');
+      }
+    }catch(err){toast('Fichier invalide: '+err.message,'error')}
   };
   reader.readAsText(file);
+}
+
+async function importTicketsToAPI(ticketArray){
+  if(isOnline){
+    const res=await fetch(API_BASE+'/api/tickets/import',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(ticketArray)
+    });
+    if(!res.ok) throw new Error('Import API error '+res.status);
+    return await res.json();
+  } else {
+    // Offline fallback: merge into localStorage
+    const existing=loadLocal('tickets')||[];
+    const maxId=existing.reduce((m,t)=>Math.max(m,t.id||0),0);
+    ticketArray.forEach((t,i)=>{t.id=maxId+i+1;existing.push(t)});
+    saveLocal('tickets',existing);
+    tickets=existing;
+  }
 }
 
 // ===== Reset =====
