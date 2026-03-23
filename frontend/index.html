@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -175,10 +175,94 @@ header .pending-badge{font-size:.7rem;font-weight:700;color:var(--orange);backgr
   .products-area{padding-bottom:20px}
 }
 @media(max-width:767px){
-  .bottom-bar{display:flex}
+  /* -- Global mobile touch behavior -- */
+  *{touch-action:manipulation}
+  html{overscroll-behavior-y:contain;-webkit-text-size-adjust:100%}
+  body{padding-top:env(safe-area-inset-top,0);-webkit-overflow-scrolling:touch}
+
+  /* -- Header compact -- */
+  header{padding:8px 12px;gap:8px}
+  header .logo{font-size:1.05rem}
+  header nav a{font-size:.7rem;padding:5px 8px;border-radius:6px}
+  header .pending-badge{font-size:.65rem;padding:2px 6px}
+
+  /* -- Search bar -- */
+  .search-wrap{padding:8px 12px 0;top:44px}
+  .search-wrap input{padding:12px 14px 12px 40px;font-size:1rem;border-radius:12px;min-height:44px}
+
+  /* -- Tab bar -- */
+  .tab-bar{padding:10px 12px 6px;gap:8px;scroll-snap-type:x mandatory;scroll-padding:0 12px}
+  .tab-btn{padding:10px 22px;font-size:.9rem;min-height:44px;border-radius:22px;scroll-snap-align:start}
+  .tab-btn.active{box-shadow:0 2px 8px rgba(255,107,53,.35)}
+
+  /* -- Products area -- */
+  .products-area{padding:8px 10px 100px}
+  .sub-heading{font-size:.78rem;margin:14px 0 8px}
+
+  /* -- Product cards -- */
+  .product-grid{gap:10px}
+  .product-card{padding:16px 14px;min-height:72px;justify-content:center;border-radius:12px;-webkit-tap-highlight-color:transparent;transition:transform .12s,box-shadow .12s,background .12s}
+  .product-card:active{transform:scale(.95);background:var(--orange-light);box-shadow:0 1px 6px rgba(255,107,53,.2)}
+  .product-card .p-name{font-size:.95rem;font-weight:600;line-height:1.3}
+  .product-card .p-price{font-size:1rem;font-weight:700}
+
+  /* -- Bottom bar -- */
+  .bottom-bar{display:flex;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0));gap:10px;min-height:64px}
+  .bottom-bar .bb-total{font-size:1.25rem;font-weight:800;color:var(--orange)}
+  .bottom-bar .bb-cart-btn{width:52px;height:52px;font-size:1.3rem;border-radius:50%;box-shadow:0 3px 12px rgba(255,107,53,.3)}
+  .bottom-bar .bb-cart-btn .badge{min-width:22px;height:22px;font-size:.75rem;top:-4px;right:-4px}
+  .bottom-bar .bb-session-btn{padding:12px 18px;font-size:.88rem;font-weight:700;border-radius:12px;min-height:44px}
+
+  /* -- Mobile cart panel -- */
   .cart-mobile-toggle{display:block}
   #cart-mobile-overlay,#cart-mobile-panel{display:flex;flex-direction:column}
-  #cart-mobile-panel{display:flex}
+  #cart-mobile-panel{display:flex;max-height:90dvh;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,0)}
+  .cart-mobile-handle{width:44px;height:5px;border-radius:3px;margin:10px auto 6px}
+
+  /* -- Cart items in mobile panel -- */
+  #cart-mobile-panel .cart-header{padding:14px 16px;font-size:1.1rem}
+  #cart-mobile-panel .cart-item{padding:12px 6px;gap:10px}
+  #cart-mobile-panel .cart-item .ci-name{font-size:.95rem;font-weight:600;line-height:1.3}
+  #cart-mobile-panel .cart-item .ci-price{font-size:.95rem;font-weight:700;min-width:68px}
+  #cart-mobile-panel .ci-mods{font-size:.78rem;margin-top:3px}
+  #cart-mobile-panel .qty-ctrl button{width:40px;height:40px;border-radius:10px;font-size:1.2rem;font-weight:700}
+  #cart-mobile-panel .qty-ctrl span{min-width:28px;font-size:1rem;font-weight:700}
+  #cart-mobile-panel .qty-ctrl{gap:4px}
+
+  /* -- Cart footer in mobile panel -- */
+  #cart-mobile-panel .cart-footer{padding:14px 16px 16px}
+  #cart-mobile-panel .cart-total{font-size:1.3rem;font-weight:800;margin-bottom:14px}
+  #cart-mobile-panel .btn-encaisser{padding:16px;font-size:1.1rem;font-weight:700;min-height:52px;border-radius:14px}
+
+  /* -- Ingredient popup mobile -- */
+  .modal-overlay{padding:0;align-items:flex-end}
+  .modal-box{max-width:100%;border-radius:20px 20px 0 0;max-height:92dvh}
+  .modal-box .modal-header{padding:16px 18px 12px}
+  .modal-box .modal-header h3{font-size:1.1rem}
+  .modal-box .modal-header .modal-close{font-size:1.6rem;padding:8px 12px;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center}
+  .modal-body{padding:12px 16px}
+  .ingredient-item{padding:14px 0}
+  .ingredient-item .ing-name{font-size:1rem;font-weight:600}
+  .ingredient-item .ing-controls button{width:48px;height:48px;border-radius:12px;font-size:.95rem;font-weight:700}
+  .ingredient-item .ing-controls{gap:10px}
+  .ingredient-item .ing-status{min-width:54px;font-size:.82rem}
+  .modal-footer{padding:12px 16px calc(16px + env(safe-area-inset-bottom,0))}
+  .modal-footer button{padding:14px;font-size:1rem;font-weight:700;min-height:50px;border-radius:14px}
+
+  /* -- Ticket confirmation popup — full screen on mobile -- */
+  #ticket-modal .modal-box{max-width:100%;max-height:100dvh;border-radius:0;min-height:100dvh;display:flex;flex-direction:column}
+  #ticket-modal .modal-body{flex:1;overflow-y:auto;padding:20px 20px 12px}
+  .ticket-number{font-size:2.8rem;font-weight:800;margin:16px 0 6px}
+  .ticket-date{font-size:.9rem;margin-bottom:18px}
+  .ticket-items .ti-row{padding:7px 0;font-size:.95rem}
+  .ticket-items .ti-mods{font-size:.8rem;padding-left:32px}
+  .ticket-total{font-size:1.3rem;font-weight:800;padding:12px 0}
+  #ticket-modal .modal-footer{padding:12px 20px calc(20px + env(safe-area-inset-bottom,0));gap:12px}
+  #ticket-modal .modal-footer button{padding:16px;font-size:1.05rem;min-height:54px;border-radius:14px}
+  #ticket-modal .modal-footer .btn-confirm{font-size:1.1rem;font-weight:800}
+
+  /* -- Cart empty state -- */
+  .cart-empty{font-size:1rem;padding:50px 0}
 }
 </style>
 </head>
