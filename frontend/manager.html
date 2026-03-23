@@ -118,6 +118,39 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .modal-box{background:var(--card);border-radius:12px;padding:24px;max-width:380px;width:90%}
 .modal-box h3{margin-bottom:12px}
 .modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+/* Full Edit Ticket Modal */
+.modal-box.wide{max-width:560px;max-height:90vh;overflow-y:auto}
+.edit-ticket-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.edit-ticket-header .ticket-id{font-weight:700;color:var(--accent);font-size:1rem}
+.edit-ticket-header .ticket-datetime{color:var(--text-light);font-size:.8rem}
+.edit-item-row{display:flex;align-items:center;gap:6px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.edit-item-name{flex:1;min-width:100px;font-weight:500;font-size:.85rem}
+.edit-item-price{font-size:.8rem;color:var(--text-light);min-width:60px;text-align:right}
+.edit-item-subtotal{font-weight:700;color:var(--accent);font-size:.85rem;min-width:70px;text-align:right}
+.edit-item-qty{display:flex;align-items:center;gap:4px}
+.edit-item-qty button{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:1rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+.edit-item-qty button:hover{background:var(--bg)}
+.edit-item-qty input{width:40px;text-align:center;padding:4px;font-size:.85rem;border:1px solid var(--border);border-radius:6px;margin:0}
+.edit-item-remove{background:none;border:none;color:var(--red);cursor:pointer;font-size:1.2rem;font-weight:700;padding:0 4px}
+.edit-item-remove:hover{opacity:.7}
+.edit-item-mods{width:100%;padding:4px 0 2px 20px;font-size:.75rem;display:flex;flex-wrap:wrap;gap:4px}
+.edit-mod-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:.72rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg)}
+.edit-mod-tag.plus{background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7}
+.edit-mod-tag.sans{background:#ffebee;color:#c62828;border-color:#ef9a9a}
+.edit-mod-tag.normal{background:var(--bg);color:var(--text-light)}
+.edit-ticket-total{display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:1.1rem;font-weight:700;border-top:2px solid var(--accent);margin-top:8px}
+.edit-ticket-total span{color:var(--accent)}
+.add-item-section{margin-top:10px;padding:10px;background:var(--bg);border-radius:8px}
+.add-item-section select{margin-bottom:6px}
+.add-item-section .add-item-btn{width:100%}
+/* Ticket list item improvements */
+.ticket-item-detail{font-size:.78rem;padding:4px 0 2px 0;color:var(--text)}
+.ticket-item-detail .ti-line{display:flex;justify-content:space-between;align-items:flex-start;padding:2px 0}
+.ticket-item-detail .ti-name{flex:1}
+.ticket-item-detail .ti-price{color:var(--accent);font-weight:600;white-space:nowrap;margin-left:8px}
+.ticket-item-detail .ti-mods{font-size:.72rem;color:var(--text-light);padding-left:16px}
+.ticket-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.75rem;color:var(--text-light);margin-bottom:4px}
+.ticket-meta .session-tag{background:var(--bg);padding:1px 6px;border-radius:4px;font-size:.7rem}
 /* Toast */
 .toast-container{position:fixed;top:80px;right:16px;z-index:300;display:flex;flex-direction:column;gap:8px}
 .toast{padding:12px 18px;border-radius:8px;color:#fff;font-size:.85rem;font-weight:500;animation:slideIn .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
@@ -353,16 +386,34 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
   </div>
 </div>
 
-<!-- Edit Ticket Status Modal -->
+<!-- Full Edit Ticket Modal -->
 <div class="modal-overlay hidden" id="modal-edit-ticket">
-  <div class="modal-box">
-    <h3>Modifier le statut</h3>
-    <p id="modal-edit-ticket-msg" style="margin-bottom:8px"></p>
-    <select id="modal-edit-ticket-status" style="margin-bottom:0">
-      <option value="new">Nouveau</option>
-      <option value="preparing">En cours</option>
-      <option value="done">Termine</option>
-    </select>
+  <div class="modal-box wide">
+    <h3>Modifier le ticket</h3>
+    <div class="edit-ticket-header">
+      <span class="ticket-id" id="edit-ticket-id"></span>
+      <span class="ticket-datetime" id="edit-ticket-datetime"></span>
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:.8rem;font-weight:600">Statut</label>
+      <select id="modal-edit-ticket-status" style="margin-bottom:0">
+        <option value="new">Nouveau</option>
+        <option value="preparing">En cours</option>
+        <option value="done">Termine</option>
+      </select>
+    </div>
+    <div id="edit-ticket-items"></div>
+    <div class="edit-ticket-total">
+      <span>Total</span>
+      <span id="edit-ticket-total-value"></span>
+    </div>
+    <div class="add-item-section">
+      <label style="font-size:.8rem;font-weight:600">Ajouter un produit</label>
+      <select id="edit-add-product-select">
+        <option value="">-- Choisir un produit --</option>
+      </select>
+      <button class="btn btn-primary btn-sm add-item-btn" onclick="editTicketAddItem()">+ Ajouter</button>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-edit-ticket')">Annuler</button>
       <button class="btn btn-primary" id="modal-edit-ticket-btn">Enregistrer</button>
@@ -855,20 +906,33 @@ function renderSales(){
     return ticketSortDir*(da>db?1:da<db?-1:0);
   });
   document.getElementById('tickets-list').innerHTML=sorted.slice(0,50).map(t=>{
-    const d=t.date||t.timestamp||'';
-    const items=(t.items||[]).map(i=>`${i.name} x${i.qty||i.quantity||1}`).join(', ');
+    const d=t.date||t.timestamp||t.created_at||'';
     const st=t.status||'new';
     const tid=t.id||'';
+    const sessionId=t.session_id||t.session||'--';
+    const itemsHtml=(t.items||[]).map(i=>{
+      const qty=i.qty||i.quantity||1;
+      const price=i.price||0;
+      const lineTotal=(qty*price).toFixed(3);
+      const modsHtml=formatTicketMods(i.mods);
+      return `<div class="ti-line"><span class="ti-name">${qty}x ${i.name}</span><span class="ti-price">${lineTotal} TND</span></div>${modsHtml?'<div class="ti-mods">'+modsHtml+'</div>':''}`;
+    }).join('');
     return `<div class="ticket-item">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
-        <span class="ticket-date">${d} ${tid?'#'+tid:''}</span>
+        <span style="font-weight:700;color:var(--accent)">#${tid}</span>
         <span class="ticket-status ${statusClass(st)}">${statusLabel(st)}</span>
       </div>
-      <div class="ticket-total">${(t.total||0).toFixed(3)} TND</div>
-      <div>${items||'--'}</div>
-      <div class="ticket-actions">
-        <button class="btn-edit" onclick="editTicketStatus(${tid})">Modifier</button>
-        <button class="btn-del" onclick="confirmDeleteTicket(${tid})">Supprimer</button>
+      <div class="ticket-meta">
+        <span>${formatDateTime(d)}</span>
+        <span class="session-tag">Session: ${sessionId}</span>
+      </div>
+      <div class="ticket-item-detail">${itemsHtml||'<span style="color:var(--text-light)">--</span>'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <div class="ticket-total">${(t.total||0).toFixed(3)} TND</div>
+        <div class="ticket-actions">
+          <button class="btn-edit" onclick="editTicket(${tid})">Modifier</button>
+          <button class="btn-del" onclick="confirmDeleteTicket(${tid})">Supprimer</button>
+        </div>
       </div>
     </div>`;
   }).join('')||'<p style="color:var(--text-light)">Aucun ticket</p>';
@@ -912,21 +976,182 @@ function confirmDeleteTicket(ticketId){
   document.getElementById('modal-delete-ticket').classList.remove('hidden');
 }
 
-function editTicketStatus(ticketId){
+// ===== Full Ticket Editor =====
+let editTicketData=null; // working copy of the ticket being edited
+
+function formatDateTime(d){
+  if(!d)return '--';
+  try{
+    const dt=new Date(d);
+    if(isNaN(dt))return d;
+    return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){return d}
+}
+
+function formatTicketMods(mods){
+  if(!mods||Object.keys(mods).length===0)return '';
+  return Object.entries(mods).map(([ing,state])=>{
+    if(state==='plus')return '<span style="color:#2e7d32">++ '+ing+'</span>';
+    if(state==='sans')return '<span style="color:#c62828">sans '+ing+'</span>';
+    return '';
+  }).filter(Boolean).join(', ');
+}
+
+function editTicket(ticketId){
   const t=tickets.find(t=>t.id===ticketId);
   if(!t)return;
-  document.getElementById('modal-edit-ticket-msg').textContent=`Ticket #${ticketId} - ${(t.total||0).toFixed(3)} TND`;
+  // Deep copy for editing
+  editTicketData=JSON.parse(JSON.stringify(t));
+  // Normalize qty field
+  (editTicketData.items||[]).forEach(item=>{
+    if(item.quantity&&!item.qty){item.qty=item.quantity}
+    if(!item.qty)item.qty=1;
+  });
+  const d=t.date||t.timestamp||t.created_at||'';
+  document.getElementById('edit-ticket-id').textContent='Ticket #'+ticketId;
+  document.getElementById('edit-ticket-datetime').textContent=formatDateTime(d);
   document.getElementById('modal-edit-ticket-status').value=t.status||'new';
-  document.getElementById('modal-edit-ticket-btn').onclick=async()=>{
-    const newStatus=document.getElementById('modal-edit-ticket-status').value;
-    t.status=newStatus;
-    if(isOnline){await apiPut('/api/tickets/'+ticketId,{status:newStatus})}
-    saveLocal('tickets',tickets);
-    closeModal('modal-edit-ticket');
-    renderSales();
-    toast('Statut mis a jour');
-  };
+  // Populate product dropdown
+  const sel=document.getElementById('edit-add-product-select');
+  const cats=getCategories();
+  sel.innerHTML='<option value="">-- Choisir un produit --</option>';
+  cats.forEach(cat=>{
+    const grp=document.createElement('optgroup');
+    grp.label=cat;
+    products.filter(p=>p.category===cat).forEach(p=>{
+      const opt=document.createElement('option');
+      opt.value=JSON.stringify({name:p.name,price:p.price,category:p.category});
+      opt.textContent=p.name+' - '+(p.price||0).toFixed(3)+' TND';
+      grp.appendChild(opt);
+    });
+    sel.appendChild(grp);
+  });
+  renderEditTicketItems();
+  document.getElementById('modal-edit-ticket-btn').onclick=saveEditedTicket;
   document.getElementById('modal-edit-ticket').classList.remove('hidden');
+}
+
+function renderEditTicketItems(){
+  if(!editTicketData)return;
+  const ingredients=loadIngredients();
+  const container=document.getElementById('edit-ticket-items');
+  container.innerHTML=(editTicketData.items||[]).map((item,idx)=>{
+    const qty=item.qty||1;
+    const price=item.price||0;
+    const subtotal=(qty*price).toFixed(3);
+    const mods=item.mods||{};
+    const modsHtml=ingredients.map(ing=>{
+      const state=mods[ing]||'normal';
+      let cls='normal';
+      let label=ing;
+      if(state==='plus'){cls='plus';label='++ '+ing}
+      else if(state==='sans'){cls='sans';label='sans '+ing}
+      return `<span class="edit-mod-tag ${cls}" onclick="cycleEditMod(${idx},'${ing.replace(/'/g,"\\'")}')">${label}</span>`;
+    }).join('');
+    return `<div class="edit-item-row">
+      <button class="edit-item-remove" onclick="editTicketRemoveItem(${idx})" title="Supprimer">&times;</button>
+      <span class="edit-item-name">${item.name}</span>
+      <div class="edit-item-qty">
+        <button onclick="editTicketQty(${idx},-1)">-</button>
+        <input type="number" value="${qty}" min="1" max="99" onchange="editTicketQtySet(${idx},this.value)">
+        <button onclick="editTicketQty(${idx},1)">+</button>
+      </div>
+      <span class="edit-item-price">${price.toFixed(3)}</span>
+      <span class="edit-item-subtotal">${subtotal}</span>
+      ${item.category==='COIN MELAH'?'<div class="edit-item-mods">'+modsHtml+'</div>':''}
+    </div>`;
+  }).join('')||'<p style="color:var(--text-light);padding:10px 0">Aucun article</p>';
+  recalcEditTotal();
+}
+
+function recalcEditTotal(){
+  if(!editTicketData)return;
+  const total=(editTicketData.items||[]).reduce((s,i)=>s+((i.qty||1)*(i.price||0)),0);
+  editTicketData.total=total;
+  document.getElementById('edit-ticket-total-value').textContent=total.toFixed(3)+' TND';
+}
+
+function editTicketQty(idx,delta){
+  if(!editTicketData||!editTicketData.items[idx])return;
+  const item=editTicketData.items[idx];
+  item.qty=Math.max(1,(item.qty||1)+delta);
+  renderEditTicketItems();
+}
+
+function editTicketQtySet(idx,val){
+  if(!editTicketData||!editTicketData.items[idx])return;
+  const n=parseInt(val);
+  if(isNaN(n)||n<1)return;
+  editTicketData.items[idx].qty=n;
+  recalcEditTotal();
+}
+
+function editTicketRemoveItem(idx){
+  if(!editTicketData)return;
+  editTicketData.items.splice(idx,1);
+  renderEditTicketItems();
+}
+
+function cycleEditMod(idx,ing){
+  if(!editTicketData||!editTicketData.items[idx])return;
+  const item=editTicketData.items[idx];
+  if(!item.mods)item.mods={};
+  const cur=item.mods[ing]||'normal';
+  // Cycle: normal -> plus -> sans -> normal
+  if(cur==='normal')item.mods[ing]='plus';
+  else if(cur==='plus')item.mods[ing]='sans';
+  else{delete item.mods[ing]}
+  // Clean empty mods
+  if(Object.keys(item.mods).length===0)delete item.mods;
+  renderEditTicketItems();
+}
+
+function editTicketAddItem(){
+  if(!editTicketData)return;
+  const sel=document.getElementById('edit-add-product-select');
+  if(!sel.value)return;
+  try{
+    const prod=JSON.parse(sel.value);
+    if(!editTicketData.items)editTicketData.items=[];
+    // Check if same product already exists (without mods)
+    const existing=editTicketData.items.find(i=>i.name===prod.name&&!i.mods);
+    if(existing){existing.qty=(existing.qty||1)+1}
+    else{editTicketData.items.push({name:prod.name,price:prod.price,qty:1,category:prod.category})}
+    sel.value='';
+    renderEditTicketItems();
+    toast('Produit ajoute','info');
+  }catch(e){}
+}
+
+async function saveEditedTicket(){
+  if(!editTicketData)return;
+  const ticketId=editTicketData.id;
+  const newStatus=document.getElementById('modal-edit-ticket-status').value;
+  editTicketData.status=newStatus;
+  // Normalize qty -> quantity for API compatibility
+  (editTicketData.items||[]).forEach(item=>{
+    item.quantity=item.qty;
+  });
+  recalcEditTotal();
+  // Update in tickets array
+  const idx=tickets.findIndex(t=>t.id===ticketId);
+  if(idx>=0){
+    tickets[idx].items=editTicketData.items;
+    tickets[idx].total=editTicketData.total;
+    tickets[idx].status=editTicketData.status;
+  }
+  if(isOnline){
+    await apiPut('/api/tickets/'+ticketId,{
+      items:editTicketData.items,
+      total:editTicketData.total,
+      status:editTicketData.status
+    });
+  }
+  saveLocal('tickets',tickets);
+  closeModal('modal-edit-ticket');
+  renderSales();
+  toast('Ticket mis a jour');
+  editTicketData=null;
 }
 
 // ===== Export =====
