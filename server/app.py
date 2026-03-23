@@ -1,6 +1,8 @@
 import json
 import os
+import socket
 import sqlite3
+from urllib.parse import urlparse, urlunparse
 from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
 
@@ -19,13 +21,28 @@ if USE_POSTGRES:
     import psycopg2.extras
 
 
+def resolve_ipv4(hostname):
+    """Resolve hostname to IPv4 address to avoid IPv6 connectivity issues."""
+    try:
+        results = socket.getaddrinfo(hostname, None, socket.AF_INET)
+        if results:
+            return results[0][4][0]
+    except socket.gaierror:
+        pass
+    return hostname
+
+
 def pg_connect(**kwargs):
     """Connect to PostgreSQL using DATABASE_URL or individual env vars."""
     if DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL, sslmode='require', **kwargs)
+        parsed = urlparse(DATABASE_URL)
+        ip = resolve_ipv4(parsed.hostname)
+        resolved_url = urlunparse(parsed._replace(netloc=f'{parsed.username}:{parsed.password}@{ip}:{parsed.port}'))
+        return psycopg2.connect(resolved_url, sslmode='require', **kwargs)
     else:
+        ip = resolve_ipv4(DB_HOST)
         return psycopg2.connect(
-            host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
+            host=ip, port=DB_PORT, dbname=DB_NAME,
             user=DB_USER, password=DB_PASSWORD,
             sslmode='require', **kwargs
         )
