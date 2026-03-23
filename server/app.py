@@ -4,13 +4,31 @@ import sqlite3
 from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
 
-# PostgreSQL support (optional, via DATABASE_URL env var)
+# PostgreSQL support (optional, via env vars)
 DATABASE_URL = os.environ.get('DATABASE_URL')
-USE_POSTGRES = bool(DATABASE_URL)
+# Support individual env vars as alternative to DATABASE_URL
+DB_HOST = os.environ.get('DB_HOST')
+DB_PORT = os.environ.get('DB_PORT', '5432')
+DB_NAME = os.environ.get('DB_NAME', 'postgres')
+DB_USER = os.environ.get('DB_USER', 'postgres')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+USE_POSTGRES = bool(DATABASE_URL or DB_HOST)
 
 if USE_POSTGRES:
     import psycopg2
     import psycopg2.extras
+
+
+def pg_connect(**kwargs):
+    """Connect to PostgreSQL using DATABASE_URL or individual env vars."""
+    if DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL, sslmode='require', **kwargs)
+    else:
+        return psycopg2.connect(
+            host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
+            user=DB_USER, password=DB_PASSWORD,
+            sslmode='require', **kwargs
+        )
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
@@ -67,7 +85,7 @@ DEFAULT_PRODUCTS = [
 def get_db():
     if 'db' not in g:
         if USE_POSTGRES:
-            g.db = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+            g.db = pg_connect(cursor_factory=psycopg2.extras.RealDictCursor)
         else:
             g.db = sqlite3.connect(DB_PATH)
             g.db.row_factory = sqlite3.Row
@@ -99,7 +117,7 @@ def close_db(exception):
 
 def init_db():
     if USE_POSTGRES:
-        conn = psycopg2.connect(DATABASE_URL)
+        conn = pg_connect()
         cur = conn.cursor()
         cur.execute('''CREATE TABLE IF NOT EXISTS products (
             id SERIAL PRIMARY KEY,
