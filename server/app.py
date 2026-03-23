@@ -33,19 +33,26 @@ def resolve_ipv4(hostname):
 
 
 def pg_connect(**kwargs):
-    """Connect to PostgreSQL using DATABASE_URL or individual env vars."""
+    """Connect to PostgreSQL, always using individual params with IPv4 resolution."""
     if DATABASE_URL:
         parsed = urlparse(DATABASE_URL)
-        ip = resolve_ipv4(parsed.hostname)
-        resolved_url = urlunparse(parsed._replace(netloc=f'{parsed.username}:{parsed.password}@{ip}:{parsed.port}'))
-        return psycopg2.connect(resolved_url, sslmode='require', **kwargs)
+        host = parsed.hostname
+        port = parsed.port or 5432
+        dbname = parsed.path.lstrip('/') or 'postgres'
+        user = parsed.username or 'postgres'
+        password = parsed.password
     else:
-        ip = resolve_ipv4(DB_HOST)
-        return psycopg2.connect(
-            host=ip, port=DB_PORT, dbname=DB_NAME,
-            user=DB_USER, password=DB_PASSWORD,
-            sslmode='require', **kwargs
-        )
+        host = DB_HOST
+        port = int(DB_PORT)
+        dbname = DB_NAME
+        user = DB_USER
+        password = DB_PASSWORD
+    ip = resolve_ipv4(host)
+    return psycopg2.connect(
+        host=ip, port=port, dbname=dbname,
+        user=user, password=password,
+        sslmode='require', **kwargs
+    )
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
@@ -375,6 +382,31 @@ def delete_ticket(ticket_id):
     db_execute('DELETE FROM tickets WHERE id = ?', (ticket_id,))
     db_commit()
     return jsonify({"deleted": ticket_id})
+
+
+@app.route('/api/tickets/import', methods=['POST'])
+def import_tickets():
+    """Import tickets from a JSON array (e.g. exported localStorage data)."""
+    data = request.get_json()
+    if not data or not isinstance(data, list):
+        return jsonify({"error": "Expected a JSON array of tickets"}), 400
+    imported = 0
+    for ticket in data:
+        items = ticket.get('items', [])
+        items_json = json.dumps(items) if isinstance(items, list) else items
+        total = ticket.get('total', 0)
+        session_id = ticket.get('session_id')
+        if session_id is not None:
+            session_id = str(session_id)
+        created_at = ticket.get('created_at')
+        status = ticket.get('status', 'done')
+        db_execute(
+            'INSERT INTO tickets (items, total, session_id, created_at, status) VALUES (?, ?, ?, ?, ?)',
+            (items_json, total, session_id, created_at, status)
+        )
+        imported += 1
+    db_commit()
+    return jsonify({"imported": imported}), 201
 
 
 # ── Sessions ──
