@@ -460,6 +460,10 @@ function initApp() {
     return d.innerHTML;
   }
 
+  // ── Normalize item fields (cashier uses 'qty', kitchen expects 'quantity') ──
+  function itemQty(i) { return i.qty || i.quantity || 1; }
+  function itemPrice(i) { return parseFloat(i.price) || 0; }
+
   // ── Render ──
   function render() {
     var grid = document.getElementById('order-grid');
@@ -490,7 +494,7 @@ function initApp() {
       var badgeText = isNew ? 'NOUVEAU' : 'EN COURS';
       var cardClass = isNew ? '' : ' preparing';
       var items = o.items || [];
-      var total = o.total || items.reduce(function(s, i) { return s + i.quantity * i.price; }, 0);
+      var total = o.total || items.reduce(function(s, i) { return s + itemQty(i) * itemPrice(i); }, 0);
 
       return '<div class="order-card' + cardClass + '" data-id="' + o.id + '" onclick="window._kitchenTap(\'' + o.id + '\',\'' + o.status + '\')">' +
         '<div class="card-top">' +
@@ -502,18 +506,20 @@ function initApp() {
         '</div>' +
         '<div class="item-list">' +
           items.map(function(i) {
+            var q = itemQty(i);
+            var p = itemPrice(i);
             var extrasHtml = '';
             if (i.extras && i.extras.length) {
               extrasHtml = '<div class="item-extras">' + i.extras.map(function(e) { return esc(e); }).join(', ') + '</div>';
             }
             return '<div class="item-row">' +
-              '<span class="qty">' + i.quantity + '\u00d7</span>' +
+              '<span class="qty">' + q + '\u00d7</span>' +
               '<span class="item-name">' + esc(i.name) + '</span>' +
-              '<span class="item-price">' + (i.quantity * i.price).toFixed(3) + '</span>' +
+              '<span class="item-price">' + (q * p).toFixed(3) + '</span>' +
             '</div>' + extrasHtml;
           }).join('') +
         '</div>' +
-        '<div class="card-total"><span>' + total.toFixed(3) + ' TND</span></div>' +
+        '<div class="card-total"><span>' + (typeof total === 'number' ? total : 0).toFixed(3) + ' TND</span></div>' +
       '</div>';
     }).join('');
   }
@@ -581,7 +587,7 @@ function initApp() {
     countEl.textContent = doneOrders.length;
     grid.innerHTML = doneOrders.map(function(o) {
       var items = o.items || [];
-      var total = o.total || items.reduce(function(s, i) { return s + i.quantity * i.price; }, 0);
+      var total = o.total || items.reduce(function(s, i) { return s + itemQty(i) * itemPrice(i); }, 0);
       var doneTime = new Date(o.done_at);
       var doneStr = doneTime.getHours().toString().padStart(2,'0') + ':' + doneTime.getMinutes().toString().padStart(2,'0');
       return '<div class="done-card">' +
@@ -593,18 +599,20 @@ function initApp() {
         '</div>' +
         '<div class="item-list">' +
           items.map(function(i) {
+            var q = itemQty(i);
+            var p = itemPrice(i);
             var extrasHtml = '';
             if (i.extras && i.extras.length) {
               extrasHtml = '<div class="item-extras">' + i.extras.map(function(e) { return esc(e); }).join(', ') + '</div>';
             }
             return '<div class="item-row">' +
-              '<span class="qty">' + i.quantity + '\u00d7</span>' +
+              '<span class="qty">' + q + '\u00d7</span>' +
               '<span class="item-name">' + esc(i.name) + '</span>' +
-              '<span class="item-price">' + (i.quantity * i.price).toFixed(3) + '</span>' +
+              '<span class="item-price">' + (q * p).toFixed(3) + '</span>' +
             '</div>' + extrasHtml;
           }).join('') +
         '</div>' +
-        '<div class="card-total"><span>' + total.toFixed(3) + ' TND</span></div>' +
+        '<div class="card-total"><span>' + (typeof total === 'number' ? total : 0).toFixed(3) + ' TND</span></div>' +
       '</div>';
     }).join('');
   }
@@ -661,10 +669,17 @@ function initApp() {
     main.classList.add('flash');
   }
 
+  // ── Smart polling: skip re-render if nothing changed ──
+  var lastPollSignature = '';
+  function buildSignature(tickets) {
+    return tickets.map(function(t) { return t.id + ':' + t.status; }).sort().join(',');
+  }
+
   // ── Poll tickets from API (with localStorage fallback) ──
   function pollTickets() {
     if (_online) {
       apiGet('/tickets?status=new,en_preparation,preparing').then(function(tickets) {
+        var sig = buildSignature(tickets);
         var hasNew = false;
         tickets.forEach(function(t) {
           if (!t.status) t.status = 'new';
@@ -678,12 +693,20 @@ function initApp() {
           if (!activeIds[id] && orders[id].status !== 'done') delete orders[id];
         });
         if (hasNew) { playBeep(); flashScreen(); }
-        render();
+        // Only re-render if data changed
+        if (sig !== lastPollSignature || hasNew) {
+          lastPollSignature = sig;
+          render();
+        }
+        // Adjust poll interval: 5s if active orders, 10s if idle
+        schedulePoll(tickets.length > 0 ? 5000 : 10000);
       }).catch(function() {
         pollLocalStorage();
+        schedulePoll(10000);
       });
     } else {
       pollLocalStorage();
+      schedulePoll(10000);
     }
   }
 
@@ -735,9 +758,36 @@ function initApp() {
     this.classList.toggle('active', darkMode);
   });
 
-  // ── Init: poll immediately, then every 2 seconds ──
+  // ── Adaptive poll scheduler ──
+  var pollTimer = null;
+  function schedulePoll(interval) {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(pollTickets, interval);
+  }
+
+  // ── Load done orders from API on init ──
+  function loadDoneOrders() {
+    if (!_online) return;
+    apiGet('/tickets?status=done').then(function(tickets) {
+      // Sort by created_at descending, take last 20
+      tickets.sort(function(a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+      tickets.slice(0, DONE_MAX).forEach(function(t) {
+        // Only add if not already in doneOrders
+        var exists = doneOrders.some(function(d) { return String(d.id) === String(t.id); });
+        if (!exists) {
+          var entry = JSON.parse(JSON.stringify(t));
+          entry.done_at = t.updated_at || t.created_at || new Date().toISOString();
+          doneOrders.push(entry);
+        }
+      });
+      if (doneOrders.length > DONE_MAX) doneOrders = doneOrders.slice(0, DONE_MAX);
+      renderDoneSection();
+    }).catch(function() {});
+  }
+
+  // ── Init: poll immediately, then adaptive interval ──
   pollTickets();
-  setInterval(pollTickets, 2000);
+  loadDoneOrders();
 }
 
 // ===========================
