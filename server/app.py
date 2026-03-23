@@ -446,6 +446,30 @@ def import_tickets():
     return jsonify({"imported": imported, "skipped": skipped, "total": len(data)}), 201
 
 
+@app.route('/api/tickets/clear', methods=['POST'])
+def clear_tickets():
+    """Delete all tickets from the database."""
+    if USE_SUPABASE:
+        sb_delete('tickets', {'id': 'gt.0'})
+    else:
+        db = get_db()
+        db.execute('DELETE FROM tickets')
+        db.commit()
+    return jsonify({"cleared": True})
+
+
+@app.route('/api/sessions/clear', methods=['POST'])
+def clear_sessions():
+    """Delete all sessions from the database."""
+    if USE_SUPABASE:
+        sb_delete('sessions', {'id': 'gt.0'})
+    else:
+        db = get_db()
+        db.execute('DELETE FROM sessions')
+        db.commit()
+    return jsonify({"cleared": True})
+
+
 # ── Sessions ──
 
 @app.route('/api/sessions/current', methods=['GET'])
