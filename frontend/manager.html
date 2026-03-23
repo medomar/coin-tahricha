@@ -276,7 +276,13 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     </div>
     <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:6px">Importer un backup (.json)</label>
     <input type="file" id="import-file" accept=".json" style="margin-bottom:8px">
-    <button class="btn btn-primary btn-sm" onclick="importBackup()">Importer</button>
+    <button class="btn btn-primary btn-sm" id="import-btn" onclick="importBackup()">Importer</button>
+    <div id="import-progress" style="display:none;margin-top:10px">
+      <div style="background:var(--border);border-radius:8px;height:8px;overflow:hidden;margin-bottom:6px">
+        <div id="import-bar" style="height:100%;background:var(--accent);border-radius:8px;width:0%;transition:width .3s"></div>
+      </div>
+      <div id="import-status" style="font-size:.8rem;color:var(--text-light)"></div>
+    </div>
   </div>
   <div class="card">
     <h3>Ingredients sandwiches</h3>
@@ -967,67 +973,115 @@ function exportExcel(){
 }
 
 // ===== Import =====
+function showImportProgress(show){
+  document.getElementById('import-progress').style.display=show?'block':'none';
+  document.getElementById('import-btn').disabled=show;
+  if(!show){document.getElementById('import-bar').style.width='0%';document.getElementById('import-status').textContent=''}
+}
+function updateImportProgress(pct,msg){
+  document.getElementById('import-bar').style.width=pct+'%';
+  document.getElementById('import-status').textContent=msg;
+}
+
 function importBackup(){
   const file=document.getElementById('import-file').files[0];
   if(!file){toast('Aucun fichier','error');return}
+  showImportProgress(true);
+  updateImportProgress(10,'Lecture du fichier...');
   const reader=new FileReader();
   reader.onload=async(e)=>{
     try{
+      updateImportProgress(20,'Analyse des donnees...');
       const data=JSON.parse(e.target.result);
-      let importedProducts=false, importedTickets=false;
+      let importedProducts=false, ticketResult=null;
 
       // Detect format: flat ticket array [...] or backup object {products, tickets}
       if(Array.isArray(data)){
-        // Flat array — detect if products or tickets by checking fields
         if(data.length>0 && data[0].items!==undefined){
-          // Ticket array
-          await importTicketsToAPI(data);
-          importedTickets=true;
+          updateImportProgress(30,`${data.length} tickets detectes...`);
+          ticketResult=await importTicketsToAPI(data);
         } else if(data.length>0 && data[0].category!==undefined){
-          // Product array
+          updateImportProgress(30,`${data.length} produits detectes...`);
           products=data;await saveProducts();
           importedProducts=true;
         }
       } else {
-        // Backup object format
-        if(data.products&&Array.isArray(data.products)){products=data.products;await saveProducts();importedProducts=true}
+        if(data.products&&Array.isArray(data.products)){
+          updateImportProgress(30,`${data.products.length} produits detectes...`);
+          products=data.products;await saveProducts();importedProducts=true;
+        }
         if(data.tickets&&Array.isArray(data.tickets)){
-          await importTicketsToAPI(data.tickets);
-          importedTickets=true;
+          updateImportProgress(50,`${data.tickets.length} tickets detectes...`);
+          ticketResult=await importTicketsToAPI(data.tickets);
         }
       }
 
-      if(importedProducts||importedTickets){
-        await loadTickets();
-        renderProducts();renderSales();renderCategories();
-        let msg='Import: ';
-        if(importedProducts) msg+='produits ';
-        if(importedTickets) msg+='tickets ';
-        toast(msg+'OK');
-      } else {
-        toast('Aucune donnee reconnue','error');
+      updateImportProgress(90,'Chargement des donnees...');
+      await loadTickets();
+      renderProducts();renderSales();renderCategories();
+      updateImportProgress(100,'Termine!');
+
+      // Build result message
+      let msg='';
+      if(importedProducts) msg+='Produits importes. ';
+      if(ticketResult){
+        msg+=`Tickets: ${ticketResult.imported} importes`;
+        if(ticketResult.skipped>0) msg+=`, ${ticketResult.skipped} doublons ignores`;
+        msg+=` (sur ${ticketResult.total} total)`;
       }
-    }catch(err){toast('Fichier invalide: '+err.message,'error')}
+      if(!importedProducts && !ticketResult) msg='Aucune donnee reconnue';
+
+      setTimeout(()=>{
+        toast(msg||'Import termine');
+        updateImportProgress(100,msg);
+        document.getElementById('import-btn').disabled=false;
+      },500);
+
+    }catch(err){
+      showImportProgress(false);
+      toast('Fichier invalide: '+err.message,'error');
+    }
   };
   reader.readAsText(file);
 }
 
 async function importTicketsToAPI(ticketArray){
   if(isOnline){
-    const res=await fetch(API_BASE+'/api/tickets/import',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(ticketArray)
-    });
-    if(!res.ok) throw new Error('Import API error '+res.status);
-    return await res.json();
+    // Send in batches of 50 for progress tracking
+    const batchSize=50;
+    let totalImported=0, totalSkipped=0;
+    for(let i=0;i<ticketArray.length;i+=batchSize){
+      const batch=ticketArray.slice(i,i+batchSize);
+      const pct=30+Math.round((i/ticketArray.length)*60);
+      updateImportProgress(pct,`Import en cours: ${i}/${ticketArray.length} tickets...`);
+      const res=await fetch(API_BASE+'/api/tickets/import',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(batch)
+      });
+      if(!res.ok) throw new Error('Import API error '+res.status);
+      const result=await res.json();
+      totalImported+=result.imported||0;
+      totalSkipped+=result.skipped||0;
+    }
+    return {imported:totalImported, skipped:totalSkipped, total:ticketArray.length};
   } else {
-    // Offline fallback: merge into localStorage
+    // Offline fallback: deduplicate by session_id + created_at + total
     const existing=loadLocal('tickets')||[];
+    const existingKeys=new Set(existing.map(t=>`${t.session_id}|${t.created_at}|${t.total}`));
     const maxId=existing.reduce((m,t)=>Math.max(m,t.id||0),0);
-    ticketArray.forEach((t,i)=>{t.id=maxId+i+1;existing.push(t)});
+    let imported=0, skipped=0, nextId=maxId+1;
+    ticketArray.forEach(t=>{
+      const key=`${t.session_id}|${t.created_at}|${t.total}`;
+      if(existingKeys.has(key)){skipped++;return}
+      existingKeys.add(key);
+      t.id=nextId++;
+      existing.push(t);
+      imported++;
+    });
     saveLocal('tickets',existing);
     tickets=existing;
+    return {imported, skipped, total:ticketArray.length};
   }
 }
 

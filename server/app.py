@@ -397,11 +397,24 @@ def delete_ticket(ticket_id):
 
 @app.route('/api/tickets/import', methods=['POST'])
 def import_tickets():
-    """Import tickets from a JSON array."""
+    """Import tickets from a JSON array, skipping duplicates."""
     data = request.get_json()
     if not data or not isinstance(data, list):
         return jsonify({"error": "Expected a JSON array of tickets"}), 400
+
+    # Load existing tickets to detect duplicates (by session_id + created_at + total)
+    existing_keys = set()
+    if USE_SUPABASE:
+        existing = sb_get('tickets', {'select': 'session_id,created_at,total'})
+    else:
+        db = get_db()
+        existing = [dict(r) for r in db.execute('SELECT session_id, created_at, total FROM tickets').fetchall()]
+    for t in existing:
+        key = f"{t.get('session_id')}|{t.get('created_at')}|{t.get('total')}"
+        existing_keys.add(key)
+
     imported = 0
+    skipped = 0
     for ticket in data:
         items = ticket.get('items', [])
         items_json = json.dumps(items) if isinstance(items, list) else items
@@ -411,6 +424,14 @@ def import_tickets():
             session_id = str(session_id)
         created_at = ticket.get('created_at')
         status = ticket.get('status', 'done')
+
+        # Check for duplicate
+        key = f"{session_id}|{created_at}|{total}"
+        if key in existing_keys:
+            skipped += 1
+            continue
+
+        existing_keys.add(key)
         row = {"items": items_json, "total": total, "session_id": session_id,
                "created_at": created_at, "status": status}
         if USE_SUPABASE:
@@ -420,9 +441,9 @@ def import_tickets():
             db.execute('INSERT INTO tickets (items, total, session_id, created_at, status) VALUES (?, ?, ?, ?, ?)',
                        (items_json, total, session_id, created_at, status))
         imported += 1
-    if not USE_SUPABASE:
+    if not USE_SUPABASE and imported > 0:
         get_db().commit()
-    return jsonify({"imported": imported}), 201
+    return jsonify({"imported": imported, "skipped": skipped, "total": len(data)}), 201
 
 
 # ── Sessions ──
