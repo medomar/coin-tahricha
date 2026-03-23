@@ -44,6 +44,7 @@ header .conn-dot.online{background:var(--success)}
 header nav{margin-left:auto;display:flex;gap:8px}
 header nav a{font-size:.78rem;color:var(--text2);text-decoration:none;padding:6px 10px;border-radius:8px;background:var(--bg);transition:all .2s}
 header nav a:hover{background:var(--orange-light);color:var(--orange)}
+header .pending-badge{font-size:.7rem;font-weight:700;color:var(--orange);background:var(--orange-light);border:1.5px solid var(--orange);border-radius:10px;padding:2px 8px;white-space:nowrap;display:none}
 
 /* ---- SEARCH ---- */
 .search-wrap{padding:10px 16px 0;position:sticky;top:54px;z-index:90;background:var(--bg)}
@@ -201,6 +202,7 @@ header nav a:hover{background:var(--orange-light);color:var(--orange)}
 <header>
   <span class="logo">Coin Ta7richa</span>
   <span class="conn-dot" id="conn-dot" title="Statut connexion"></span>
+  <span class="pending-badge" id="pending-badge"></span>
   <nav>
     <a href="kitchen.html">Cuisine</a>
     <a href="manager.html">Manager</a>
@@ -749,6 +751,7 @@ async function encaisser(){
       const pending = JSON.parse(localStorage.getItem('cointahricha_pending_tickets')||'[]');
       pending.push(ticket);
       localStorage.setItem('cointahricha_pending_tickets',JSON.stringify(pending));
+      updatePendingBadge();
     }catch(e){}
   }
 
@@ -847,7 +850,53 @@ function closeMobileCart(){
   },300);
 }
 
+// ---- PENDING TICKETS BADGE ----
+function updatePendingBadge(){
+  const badge = document.getElementById('pending-badge');
+  try{
+    const pending = JSON.parse(localStorage.getItem('cointahricha_pending_tickets')||'[]');
+    if(pending.length>0){
+      badge.textContent = pending.length+' en attente';
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }catch(e){
+    badge.style.display = 'none';
+  }
+}
+
+// ---- SYNC PENDING TICKETS ----
+let isSyncing = false;
+async function syncPendingTickets(){
+  if(isSyncing) return;
+  let pending;
+  try{
+    pending = JSON.parse(localStorage.getItem('cointahricha_pending_tickets')||'[]');
+  }catch(e){ return; }
+  if(pending.length===0) return;
+
+  isSyncing = true;
+  let synced = 0;
+  const remaining = [];
+
+  for(const ticket of pending){
+    const res = await apiFetch('/api/tickets',{method:'POST',body:ticket});
+    if(res){
+      synced++;
+    } else {
+      remaining.push(ticket);
+    }
+  }
+
+  localStorage.setItem('cointahricha_pending_tickets',JSON.stringify(remaining));
+  updatePendingBadge();
+  if(synced>0) toast(synced+' ticket'+(synced>1?'s':'')+' synchronisé'+(synced>1?'s':''));
+  isSyncing = false;
+}
+
 // ---- CONNECTION CHECK ----
+let wasOnline = false;
 async function checkConnection(){
   try{
     const r = await fetch(API_BASE+'/api/ping',{method:'GET',signal:AbortSignal.timeout(3000)});
@@ -856,6 +905,12 @@ async function checkConnection(){
     isOnline = false;
   }
   document.getElementById('conn-dot').classList.toggle('online',isOnline);
+  // Detect offline → online transition and sync
+  if(isOnline && !wasOnline){
+    syncPendingTickets();
+  }
+  wasOnline = isOnline;
+  updatePendingBadge();
 }
 
 // ---- SEARCH ----
@@ -871,7 +926,9 @@ async function initApp(){
   renderTabs();
   renderProducts();
   renderCart();
-  checkConnection();
+  updatePendingBadge();
+  await checkConnection();
+  if(isOnline) syncPendingTickets();
   setInterval(checkConnection,5000);
 }
 

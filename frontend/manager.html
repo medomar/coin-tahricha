@@ -158,6 +158,9 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
 .toast.info{background:var(--blue)}
+/* Sync animation */
+.sync-dot.syncing{background:#f39c12;animation:syncPulse 1s ease infinite}
+@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.3}}
 /* Responsive */
 @media(max-width:480px){
   .stats-grid{grid-template-columns:1fr 1fr}
@@ -476,6 +479,7 @@ const DEFAULT_PRODUCTS = [
 let products = [];
 let tickets = [];
 let isOnline = false;
+let wasOnline = false;
 let editingIdx = -1;
 let filteredTickets = null;
 
@@ -575,6 +579,7 @@ async function apiDelete(path){
 // ===== Sync indicator =====
 async function checkSync(){
   const res = await apiGet('/api/products');
+  const prevOnline = isOnline;
   isOnline = !!res;
   const dot=document.getElementById('sync-dot');
   const txt=document.getElementById('sync-text');
@@ -583,7 +588,25 @@ async function checkSync(){
   }else{
     dot.className='sync-dot offline';txt.textContent='Mode local (localStorage)';
   }
+  // Detect offline→online transition and sync data
+  if(isOnline && wasOnline && !prevOnline){
+    await syncFromServer();
+  }
+  wasOnline = true;
 }
+async function syncFromServer(){
+  const dot=document.getElementById('sync-dot');
+  const txt=document.getElementById('sync-text');
+  dot.className='sync-dot syncing';txt.textContent='Synchronisation...';
+  await loadProducts();
+  await loadTickets();
+  renderProducts();
+  renderSales();
+  dot.className='sync-dot online';txt.textContent='Connecte (serveur)';
+  toast('Donnees synchronisees','success');
+}
+// Periodic connection check (every 15s)
+setInterval(()=>{checkSync()},15000);
 
 // ===== Data load/save =====
 function saveLocal(key,data){localStorage.setItem('cointahricha_'+key,JSON.stringify(data))}

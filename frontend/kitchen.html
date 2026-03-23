@@ -120,6 +120,9 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
 .offline-msg .icon{font-size:3rem;margin-bottom:16px;opacity:.5}
 .offline-msg .msg{font-size:1rem;font-weight:600;margin-bottom:8px}
 .offline-msg .sub{font-size:.82rem;color:var(--muted-2)}
+.offline-msg .reconnecting{font-size:.85rem;color:var(--warning);font-weight:600;margin-top:12px;display:flex;align-items:center;gap:6px}
+.offline-msg .reconnecting .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--warning);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* Item extras (ingredient modifications) */
 .item-extras{font-size:.75rem;font-style:italic;color:var(--muted);margin-left:30px;padding:1px 0}
@@ -226,6 +229,7 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
     <div class="icon">&#9888;</div>
     <div class="msg">Serveur non disponible</div>
     <div class="sub">Mode local &#8212; les tickets seront lus depuis localStorage</div>
+    <div class="reconnecting"><span class="spinner"></span> Reconnexion en cours...</div>
   </div>
   <div class="done-section" id="done-section" style="display:none">
     <div class="done-header" id="done-header" onclick="window._toggleDoneSection()">
@@ -300,10 +304,24 @@ function updateConnDot(online) {
   }
 }
 
+var _wasOnline = false;
+var _onReconnectCallbacks = [];
+
 function checkPing() {
   fetch(API_BASE + '/api/ping', {method: 'GET', signal: AbortSignal.timeout(3000)})
-    .then(function(res) { updateConnDot(res.ok); })
-    .catch(function() { updateConnDot(false); });
+    .then(function(res) {
+      var nowOnline = res.ok;
+      var justReconnected = nowOnline && !_wasOnline && _wasOnline !== undefined;
+      updateConnDot(nowOnline);
+      _wasOnline = nowOnline;
+      if (justReconnected) {
+        _onReconnectCallbacks.forEach(function(cb) { cb(); });
+      }
+    })
+    .catch(function() {
+      _wasOnline = _online;
+      updateConnDot(false);
+    });
 }
 setInterval(checkPing, 5000);
 checkPing();
@@ -527,20 +545,85 @@ function initApp() {
   // Update time-ago every 15s
   setInterval(render, 15000);
 
+  // ── Pending kitchen updates (offline queue) ──
+  var PENDING_KEY = 'cointahricha_pending_kitchen_updates';
+
+  function getPendingUpdates() {
+    try {
+      var raw = localStorage.getItem(PENDING_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+
+  function savePendingUpdate(ticketId, newStatus) {
+    var pending = getPendingUpdates();
+    // Replace existing entry for same ticket
+    pending = pending.filter(function(p) { return String(p.id) !== String(ticketId); });
+    pending.push({id: ticketId, status: newStatus, queued_at: new Date().toISOString()});
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); } catch (e) {}
+  }
+
+  function clearPendingUpdates() {
+    try { localStorage.removeItem(PENDING_KEY); } catch (e) {}
+  }
+
+  function syncPendingUpdates() {
+    var pending = getPendingUpdates();
+    if (!pending.length) return;
+    var synced = 0;
+    var total = pending.length;
+    var remaining = pending.slice();
+
+    function next() {
+      if (!remaining.length) {
+        clearPendingUpdates();
+        if (synced > 0) {
+          showToast(synced + ' mise' + (synced > 1 ? 's' : '') + ' \u00e0 jour synchronis\u00e9e' + (synced > 1 ? 's' : ''));
+        }
+        return;
+      }
+      var item = remaining.shift();
+      apiPut('/tickets/' + item.id, {status: item.status}).then(function() {
+        synced++;
+        next();
+      }).catch(function() {
+        // Put failed item back and save remaining
+        remaining.unshift(item);
+        try { localStorage.setItem(PENDING_KEY, JSON.stringify(remaining)); } catch (e) {}
+        if (synced > 0) {
+          showToast(synced + ' mise' + (synced > 1 ? 's' : '') + ' \u00e0 jour synchronis\u00e9e' + (synced > 1 ? 's' : ''));
+        }
+      });
+    }
+    next();
+  }
+
   // ── Update ticket status via API with localStorage fallback ──
   function updateTicketStatus(ticketId, newStatus) {
-    apiPut('/tickets/' + ticketId, {status: newStatus}).catch(function() {
-      // Fallback to localStorage
-      try {
-        var raw = localStorage.getItem('pos_tickets');
-        if (!raw) return;
-        var tickets = JSON.parse(raw);
-        tickets.forEach(function(t) {
-          if (String(t.id) === String(ticketId)) t.status = newStatus;
-        });
-        localStorage.setItem('pos_tickets', JSON.stringify(tickets));
-      } catch (e) {}
-    });
+    if (_online) {
+      apiPut('/tickets/' + ticketId, {status: newStatus}).catch(function() {
+        // API call failed, queue for later sync
+        savePendingUpdate(ticketId, newStatus);
+        // Also update localStorage for local consistency
+        updateLocalStorageTicket(ticketId, newStatus);
+      });
+    } else {
+      // Offline: queue and update localStorage
+      savePendingUpdate(ticketId, newStatus);
+      updateLocalStorageTicket(ticketId, newStatus);
+    }
+  }
+
+  function updateLocalStorageTicket(ticketId, newStatus) {
+    try {
+      var raw = localStorage.getItem('pos_tickets');
+      if (!raw) return;
+      var tickets = JSON.parse(raw);
+      tickets.forEach(function(t) {
+        if (String(t.id) === String(ticketId)) t.status = newStatus;
+      });
+      localStorage.setItem('pos_tickets', JSON.stringify(tickets));
+    } catch (e) {}
   }
 
   // ── Done orders list ──
@@ -784,6 +867,17 @@ function initApp() {
       renderDoneSection();
     }).catch(function() {});
   }
+
+  // ── Reconnect handler: sync pending updates + full reload ──
+  _onReconnectCallbacks.push(function() {
+    showToast('Reconnect\u00e9 au serveur');
+    // Sync any offline status updates first, then reload tickets
+    syncPendingUpdates();
+    // Force a full data reload
+    lastPollSignature = '';
+    pollTickets();
+    loadDoneOrders();
+  });
 
   // ── Init: poll immediately, then adaptive interval ──
   pollTickets();
