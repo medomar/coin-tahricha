@@ -4,6 +4,14 @@ import sqlite3
 from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
 
+# PostgreSQL support (optional, via DATABASE_URL env var)
+DATABASE_URL = os.environ.get('DATABASE_URL')
+USE_POSTGRES = bool(DATABASE_URL)
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend')
 
 app = Flask(__name__)
@@ -58,9 +66,28 @@ DEFAULT_PRODUCTS = [
 
 def get_db():
     if 'db' not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
+        if USE_POSTGRES:
+            g.db = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        else:
+            g.db = sqlite3.connect(DB_PATH)
+            g.db.row_factory = sqlite3.Row
     return g.db
+
+
+def db_execute(query, params=None):
+    """Execute a query, translating ? placeholders to %s for PostgreSQL."""
+    db = get_db()
+    if USE_POSTGRES:
+        query = query.replace('?', '%s')
+        cur = db.cursor()
+        cur.execute(query, params or ())
+        return cur
+    else:
+        return db.execute(query, params or ())
+
+
+def db_commit():
+    get_db().commit()
 
 
 @app.teardown_appcontext
@@ -71,33 +98,69 @@ def close_db(exception):
 
 
 def init_db():
-    db = sqlite3.connect(DB_PATH)
-    db.execute('''CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        category TEXT NOT NULL,
-        price REAL NOT NULL DEFAULT 0
-    )''')
-    db.execute('''CREATE TABLE IF NOT EXISTS tickets (
-        id INTEGER PRIMARY KEY,
-        items TEXT,
-        total REAL,
-        session_id TEXT,
-        created_at TEXT,
-        status TEXT DEFAULT 'new'
-    )''')
-    db.execute('''CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY,
-        started_at TEXT,
-        ended_at TEXT
-    )''')
-    count = db.execute('SELECT COUNT(*) FROM products').fetchone()[0]
-    if count == 0:
-        for p in DEFAULT_PRODUCTS:
-            db.execute('INSERT INTO products (id, name, category, price) VALUES (?, ?, ?, ?)',
-                       (p['id'], p['name'], p['category'], p['price']))
-    db.commit()
-    db.close()
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        cur.execute('''CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            price DOUBLE PRECISION NOT NULL DEFAULT 0
+        )''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS tickets (
+            id SERIAL PRIMARY KEY,
+            items TEXT,
+            total DOUBLE PRECISION,
+            session_id TEXT,
+            created_at TEXT,
+            status TEXT DEFAULT 'new'
+        )''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS sessions (
+            id SERIAL PRIMARY KEY,
+            started_at TEXT,
+            ended_at TEXT
+        )''')
+        cur.execute('SELECT COUNT(*) FROM products')
+        count = cur.fetchone()[0]
+        if count == 0:
+            for p in DEFAULT_PRODUCTS:
+                cur.execute(
+                    'INSERT INTO products (id, name, category, price) VALUES (%s, %s, %s, %s)',
+                    (p['id'], p['name'], p['category'], p['price'])
+                )
+            # Reset sequence to max id so future inserts get correct IDs
+            cur.execute("SELECT setval('products_id_seq', (SELECT MAX(id) FROM products))")
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        db = sqlite3.connect(DB_PATH)
+        db.execute('''CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL,
+            price REAL NOT NULL DEFAULT 0
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY,
+            items TEXT,
+            total REAL,
+            session_id TEXT,
+            created_at TEXT,
+            status TEXT DEFAULT 'new'
+        )''')
+        db.execute('''CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY,
+            started_at TEXT,
+            ended_at TEXT
+        )''')
+        count = db.execute('SELECT COUNT(*) FROM products').fetchone()[0]
+        if count == 0:
+            for p in DEFAULT_PRODUCTS:
+                db.execute('INSERT INTO products (id, name, category, price) VALUES (?, ?, ?, ?)',
+                           (p['id'], p['name'], p['category'], p['price']))
+        db.commit()
+        db.close()
 
 init_db()
 
@@ -117,8 +180,7 @@ def ping():
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    db = get_db()
-    rows = db.execute('SELECT * FROM products').fetchall()
+    rows = db_execute('SELECT * FROM products').fetchall()
     return jsonify([row_to_dict(r) for r in rows])
 
 
@@ -132,23 +194,29 @@ def create_product():
     price = data.get('price', 0)
     if not name or not category:
         return jsonify({"error": "Name and category are required"}), 400
-    db = get_db()
-    cursor = db.execute('INSERT INTO products (name, category, price) VALUES (?, ?, ?)',
-                        (name, category, price))
-    db.commit()
-    product = row_to_dict(db.execute('SELECT * FROM products WHERE id = ?', (cursor.lastrowid,)).fetchone())
+    if USE_POSTGRES:
+        cur = db_execute('INSERT INTO products (name, category, price) VALUES (?, ?, ?) RETURNING id',
+                         (name, category, price))
+        new_id = cur.fetchone()['id']
+    else:
+        cur = db_execute('INSERT INTO products (name, category, price) VALUES (?, ?, ?)',
+                         (name, category, price))
+        new_id = cur.lastrowid
+    db_commit()
+    product = row_to_dict(db_execute('SELECT * FROM products WHERE id = ?', (new_id,)).fetchone())
     return jsonify(product), 201
 
 
 @app.route('/api/products/reset', methods=['POST'])
 def reset_products():
-    db = get_db()
-    db.execute('DELETE FROM products')
+    db_execute('DELETE FROM products')
     for p in DEFAULT_PRODUCTS:
-        db.execute('INSERT INTO products (id, name, category, price) VALUES (?, ?, ?, ?)',
+        db_execute('INSERT INTO products (id, name, category, price) VALUES (?, ?, ?, ?)',
                    (p['id'], p['name'], p['category'], p['price']))
-    db.commit()
-    rows = db.execute('SELECT * FROM products').fetchall()
+    if USE_POSTGRES:
+        db_execute("SELECT setval('products_id_seq', (SELECT MAX(id) FROM products))")
+    db_commit()
+    rows = db_execute('SELECT * FROM products').fetchall()
     return jsonify([row_to_dict(r) for r in rows])
 
 
@@ -157,29 +225,27 @@ def update_product(product_id):
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON"}), 400
-    db = get_db()
-    existing = db.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
+    existing = db_execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
     if not existing:
         return jsonify({"error": "Product not found"}), 404
     existing = row_to_dict(existing)
     name = data.get('name', existing['name'])
     category = data.get('category', existing['category'])
     price = data.get('price', existing['price'])
-    db.execute('UPDATE products SET name = ?, category = ?, price = ? WHERE id = ?',
+    db_execute('UPDATE products SET name = ?, category = ?, price = ? WHERE id = ?',
                (name, category, price, product_id))
-    db.commit()
-    product = row_to_dict(db.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone())
+    db_commit()
+    product = row_to_dict(db_execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone())
     return jsonify(product)
 
 
 @app.route('/api/products/<int:product_id>', methods=['DELETE'])
 def delete_product(product_id):
-    db = get_db()
-    existing = db.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
+    existing = db_execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
     if not existing:
         return jsonify({"error": "Product not found"}), 404
-    db.execute('DELETE FROM products WHERE id = ?', (product_id,))
-    db.commit()
+    db_execute('DELETE FROM products WHERE id = ?', (product_id,))
+    db_commit()
     return jsonify({"deleted": product_id})
 
 
@@ -187,7 +253,6 @@ def delete_product(product_id):
 
 @app.route('/api/tickets', methods=['GET'])
 def get_tickets():
-    db = get_db()
     query = 'SELECT * FROM tickets WHERE 1=1'
     params = []
     status_filter = request.args.get('status')
@@ -200,7 +265,7 @@ def get_tickets():
     if session_id:
         query += ' AND session_id = ?'
         params.append(session_id)
-    rows = db.execute(query, params).fetchall()
+    rows = db_execute(query, params).fetchall()
     tickets = []
     for r in rows:
         t = row_to_dict(r)
@@ -219,13 +284,20 @@ def create_ticket():
         return jsonify({"error": "Invalid JSON"}), 400
     items = data.get('items', [])
     items_json = json.dumps(items) if not isinstance(items, str) else items
-    db = get_db()
-    cursor = db.execute(
-        'INSERT INTO tickets (items, total, session_id, created_at, status) VALUES (?, ?, ?, ?, ?)',
-        (items_json, data.get('total', 0), data.get('session_id'), data.get('created_at'), data.get('status', 'new'))
-    )
-    db.commit()
-    ticket = row_to_dict(db.execute('SELECT * FROM tickets WHERE id = ?', (cursor.lastrowid,)).fetchone())
+    if USE_POSTGRES:
+        cur = db_execute(
+            'INSERT INTO tickets (items, total, session_id, created_at, status) VALUES (?, ?, ?, ?, ?) RETURNING id',
+            (items_json, data.get('total', 0), data.get('session_id'), data.get('created_at'), data.get('status', 'new'))
+        )
+        new_id = cur.fetchone()['id']
+    else:
+        cur = db_execute(
+            'INSERT INTO tickets (items, total, session_id, created_at, status) VALUES (?, ?, ?, ?, ?)',
+            (items_json, data.get('total', 0), data.get('session_id'), data.get('created_at'), data.get('status', 'new'))
+        )
+        new_id = cur.lastrowid
+    db_commit()
+    ticket = row_to_dict(db_execute('SELECT * FROM tickets WHERE id = ?', (new_id,)).fetchone())
     try:
         ticket['items'] = json.loads(ticket['items']) if ticket['items'] else []
     except (json.JSONDecodeError, TypeError):
@@ -238,8 +310,7 @@ def update_ticket(ticket_id):
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON"}), 400
-    db = get_db()
-    existing = db.execute('SELECT * FROM tickets WHERE id = ?', (ticket_id,)).fetchone()
+    existing = db_execute('SELECT * FROM tickets WHERE id = ?', (ticket_id,)).fetchone()
     if not existing:
         return jsonify({"error": "Ticket not found"}), 404
     existing = row_to_dict(existing)
@@ -250,10 +321,10 @@ def update_ticket(ticket_id):
     session_id = data.get('session_id', existing['session_id'])
     created_at = data.get('created_at', existing['created_at'])
     status = data.get('status', existing['status'])
-    db.execute('UPDATE tickets SET items = ?, total = ?, session_id = ?, created_at = ?, status = ? WHERE id = ?',
+    db_execute('UPDATE tickets SET items = ?, total = ?, session_id = ?, created_at = ?, status = ? WHERE id = ?',
                (items, total, session_id, created_at, status, ticket_id))
-    db.commit()
-    ticket = row_to_dict(db.execute('SELECT * FROM tickets WHERE id = ?', (ticket_id,)).fetchone())
+    db_commit()
+    ticket = row_to_dict(db_execute('SELECT * FROM tickets WHERE id = ?', (ticket_id,)).fetchone())
     try:
         ticket['items'] = json.loads(ticket['items']) if ticket['items'] else []
     except (json.JSONDecodeError, TypeError):
@@ -263,12 +334,11 @@ def update_ticket(ticket_id):
 
 @app.route('/api/tickets/<int:ticket_id>', methods=['DELETE'])
 def delete_ticket(ticket_id):
-    db = get_db()
-    existing = db.execute('SELECT * FROM tickets WHERE id = ?', (ticket_id,)).fetchone()
+    existing = db_execute('SELECT * FROM tickets WHERE id = ?', (ticket_id,)).fetchone()
     if not existing:
         return jsonify({"error": "Ticket not found"}), 404
-    db.execute('DELETE FROM tickets WHERE id = ?', (ticket_id,))
-    db.commit()
+    db_execute('DELETE FROM tickets WHERE id = ?', (ticket_id,))
+    db_commit()
     return jsonify({"deleted": ticket_id})
 
 
@@ -276,8 +346,7 @@ def delete_ticket(ticket_id):
 
 @app.route('/api/sessions/current', methods=['GET'])
 def get_current_session():
-    db = get_db()
-    row = db.execute('SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1').fetchone()
+    row = db_execute('SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1').fetchone()
     if not row:
         return jsonify(None)
     return jsonify(row_to_dict(row))
@@ -288,11 +357,16 @@ def create_session():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON"}), 400
-    db = get_db()
-    cursor = db.execute('INSERT INTO sessions (started_at, ended_at) VALUES (?, ?)',
-                        (data.get('started_at'), data.get('ended_at')))
-    db.commit()
-    session = row_to_dict(db.execute('SELECT * FROM sessions WHERE id = ?', (cursor.lastrowid,)).fetchone())
+    if USE_POSTGRES:
+        cur = db_execute('INSERT INTO sessions (started_at, ended_at) VALUES (?, ?) RETURNING id',
+                         (data.get('started_at'), data.get('ended_at')))
+        new_id = cur.fetchone()['id']
+    else:
+        cur = db_execute('INSERT INTO sessions (started_at, ended_at) VALUES (?, ?)',
+                         (data.get('started_at'), data.get('ended_at')))
+        new_id = cur.lastrowid
+    db_commit()
+    session = row_to_dict(db_execute('SELECT * FROM sessions WHERE id = ?', (new_id,)).fetchone())
     return jsonify(session), 201
 
 
@@ -301,17 +375,16 @@ def update_session(session_id):
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON"}), 400
-    db = get_db()
-    existing = db.execute('SELECT * FROM sessions WHERE id = ?', (session_id,)).fetchone()
+    existing = db_execute('SELECT * FROM sessions WHERE id = ?', (session_id,)).fetchone()
     if not existing:
         return jsonify({"error": "Session not found"}), 404
     existing = row_to_dict(existing)
     started_at = data.get('started_at', existing['started_at'])
     ended_at = data.get('ended_at', existing['ended_at'])
-    db.execute('UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = ?',
+    db_execute('UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = ?',
                (started_at, ended_at, session_id))
-    db.commit()
-    session = row_to_dict(db.execute('SELECT * FROM sessions WHERE id = ?', (session_id,)).fetchone())
+    db_commit()
+    session = row_to_dict(db_execute('SELECT * FROM sessions WHERE id = ?', (session_id,)).fetchone())
     return jsonify(session)
 
 

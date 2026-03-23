@@ -3,7 +3,7 @@
 ## Project Overview
 Coin Ta7richa is a standalone POS (Point of Sale) system for a Tunisian food corner. It consists of:
 - **Frontend** (`frontend/`): 3 HTML pages — Cashier POS, Kitchen Display, Manager Dashboard
-- **Backend** (`server/`): Flask API with SQLite database
+- **Backend** (`server/`): Flask API with PostgreSQL (Supabase) or SQLite fallback
 
 ## Architecture
 - Frontend is served by the Flask backend (same-origin), so API calls use relative URLs (`/api/...`)
@@ -28,10 +28,16 @@ Coin Ta7richa is a standalone POS (Point of Sale) system for a Tunisian food cor
 - `PUT /api/sessions/:id` — Update session
 - `GET /api/ping` — Health check
 
+## Database
+- **Production**: PostgreSQL via Supabase (set `DATABASE_URL` env var)
+- **Local dev**: SQLite (`data.db`) when `DATABASE_URL` is not set
+- Data is persistent on Supabase (survives redeploys)
+
 ## Deployment
 - **Render.com**: Deploy the whole project — `render.yaml` configures the service
 - Backend serves frontend files from `../frontend/` directory
-- Free plan on Render works fine for this use case
+- Set `DATABASE_URL` in Render env vars to connect to Supabase PostgreSQL
+- Root directory on Render must be set to `server`
 
 ## Currency
 All prices are in Tunisian Dinars (TND), displayed with 3 decimal places.
