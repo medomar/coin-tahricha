@@ -361,6 +361,10 @@ function detectApi(){
   if(localStorage.getItem(LS.api)){
     return localStorage.getItem(LS.api);
   }
+  // If on GitHub Pages or other external host, use the Render API
+  if(location.hostname.includes('github.io')){
+    return 'https://coin-tahricha.onrender.com';
+  }
   // Same-origin: use relative URL (works on Render where frontend+backend share origin)
   return '';
 }

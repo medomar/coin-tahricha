@@ -256,6 +256,10 @@ var API_BASE = (function() {
   }
   var stored = localStorage.getItem('api_base');
   if (stored) return stored;
+  // If on GitHub Pages, use the Render API
+  if (window.location.hostname.indexOf('github.io') !== -1) {
+    return 'https://coin-tahricha.onrender.com';
+  }
   return '';
 })();
 var _online = false;

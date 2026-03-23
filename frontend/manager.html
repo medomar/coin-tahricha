@@ -439,7 +439,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     location.href = location.pathname;
   }
 })();
-const API_BASE = localStorage.getItem('api_base') || '';
+const API_BASE = localStorage.getItem('api_base') || (location.hostname.includes('github.io') ? 'https://coin-tahricha.onrender.com' : '');
 
 // ===== Default Products =====
 const DEFAULT_PRODUCTS = [
