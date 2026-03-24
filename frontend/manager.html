@@ -945,10 +945,10 @@ function renderSales(){
   const totalTND=tix.reduce((s,t)=>s+(t.total||0),0);
   const count=tix.length;
   const today=new Date().toISOString().slice(0,10);
-  const todayTix=tix.filter(t=>(t.date||t.timestamp||'').slice(0,10)===today);
+  const todayTix=tix.filter(t=>(t.created_at||t.created_at||t.date||t.timestamp||'').slice(0,10)===today);
   const todayTND=todayTix.reduce((s,t)=>s+(t.total||0),0);
   const weekAgo=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
-  const weekTix=tix.filter(t=>(t.date||t.timestamp||'').slice(0,10)>=weekAgo);
+  const weekTix=tix.filter(t=>(t.created_at||t.created_at||t.date||t.timestamp||'').slice(0,10)>=weekAgo);
   const weekTND=weekTix.reduce((s,t)=>s+(t.total||0),0);
   document.getElementById('stats-grid').innerHTML=`
     <div class="stat-card"><div class="stat-value">${totalTND.toFixed(3)}</div><div class="stat-label">Total TND</div></div>
@@ -965,7 +965,7 @@ function renderSales(){
   // Tickets sorted
   const sorted=[...tix].sort((a,b)=>{
     if(ticketSortBy==='total'){return ticketSortDir*((a.total||0)-(b.total||0))}
-    const da=a.date||a.timestamp||'';const db=b.date||b.timestamp||'';
+    const da=a.created_at||a.date||a.timestamp||'';const db=b.created_at||b.date||b.timestamp||'';
     return ticketSortDir*(da>db?1:da<db?-1:0);
   });
   document.getElementById('tickets-list').innerHTML=sorted.slice(0,50).map(t=>{
@@ -1006,7 +1006,7 @@ function filterSales(){
   const to=document.getElementById('date-to').value;
   const statusVal=document.getElementById('status-filter').value;
   filteredTickets=tickets.filter(t=>{
-    const d=(t.date||t.timestamp||'').slice(0,10);
+    const d=(t.created_at||t.created_at||t.date||t.timestamp||'').slice(0,10);
     if(from&&d<from)return false;
     if(to&&d>to)return false;
     if(statusVal&&(t.status||'new')!==statusVal)return false;
@@ -1242,7 +1242,7 @@ function exportExcel(){
       const lineTotal=qty*unitPrice;
       grandTotal+=lineTotal;
       rows.push({
-        'Date':t.date||t.timestamp||'',
+        'Date':t.created_at||t.date||t.timestamp||'',
         'Session #':sessionNum,
         'Ticket #':ti+1,
         'Produit':it.name||'',
