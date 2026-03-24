@@ -410,7 +410,8 @@ const DEFAULT_PRODUCTS = [
   {name:"Zbeda Arbi",price:0.5,category:"COIN HLOU"}
 ];
 
-const CATEGORIES = ["COIN DRO3","COIN MELAH","COIN HLOU"];
+const DEFAULT_CATEGORIES = ["COIN DRO3","COIN MELAH","COIN HLOU"];
+function getCategories(){ const seen=new Set(); const cats=[]; DEFAULT_CATEGORIES.forEach(c=>{seen.add(c);cats.push(c)}); products.forEach(p=>{ if(p.category&&!seen.has(p.category)){seen.add(p.category);cats.push(p.category)} }); return cats; }
 const LS = {
   pin:'cointahricha_caisse_pin',
   auth:'cointahricha_caisse_auth',
@@ -507,7 +508,7 @@ function toast(msg){
 
 // ---- STATE ----
 let products = [];
-let activeTab = CATEGORIES[0];
+let activeTab = DEFAULT_CATEGORIES[0];
 let cart = []; // {name, price, qty, category}
 let currentSession = null;
 let searchQuery = '';
@@ -583,8 +584,9 @@ function updateSessionUI(){
 // ---- RENDER TABS ----
 function renderTabs(){
   const bar = document.getElementById('tab-bar');
-  bar.innerHTML = CATEGORIES.map(c =>
-    `<button class="tab-btn ${c===activeTab?'active':''}" onclick="switchTab('${c}')">${c}</button>`
+  const cats = getCategories();
+  bar.innerHTML = cats.map(c =>
+    `<button class="tab-btn ${c===activeTab?'active':''}" onclick="switchTab('${c.replace(/'/g,"\\'")}')">${c}</button>`
   ).join('');
 }
 
