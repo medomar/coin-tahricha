@@ -237,11 +237,42 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 /* Sync animation */
 .sync-dot.syncing{background:#f39c12;animation:syncPulse 1s ease infinite}
 @keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* Sub-tabs inside Ventes */
+.period-card{padding:12px 14px;margin-bottom:10px}
+.subtab-nav{display:flex;gap:4px;background:var(--card);border-radius:10px;padding:4px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.subtab-btn{flex:1;min-width:88px;padding:10px 12px;border:none;background:none;font-size:.78rem;font-weight:600;color:var(--text-light);cursor:pointer;border-radius:8px;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:5px;transition:background .15s,color .15s}
+.subtab-btn:hover{background:var(--bg)}
+.subtab-btn.active{background:var(--accent);color:#fff;box-shadow:0 2px 6px rgba(255,107,53,.3)}
+.subtab-btn .subtab-badge{background:var(--red);color:#fff;font-size:.65rem;padding:1px 7px;border-radius:8px;font-weight:700;line-height:1.4}
+.subtab-btn.active .subtab-badge{background:#fff;color:var(--accent)}
+.subtab-content{display:none}
+.subtab-content.active{display:block}
+
 /* Responsive */
 @media(max-width:480px){
-  .stats-grid{grid-template-columns:1fr 1fr}
+  .stats-grid{grid-template-columns:1fr 1fr;gap:8px}
   .prod-row{font-size:.8rem}
   .tab-btn{font-size:.75rem;padding:10px 4px}
+  .stat-card{padding:10px 8px}
+  .stat-value{font-size:1.2rem}
+  .stat-label{font-size:.65rem;line-height:1.2}
+  .stat-card.lifetime .stat-label{font-size:.62rem}
+  .stats-breakdown{font-size:.7rem;gap:8px;padding:4px 0;margin-bottom:10px}
+  .subtab-btn{font-size:.72rem;padding:9px 8px;min-width:78px}
+  .card{padding:12px}
+  .card h3{font-size:.95rem}
+  .chip{padding:6px 12px;font-size:.74rem}
+  .dup-cluster{padding:8px}
+  .dup-ticket{padding:8px}
+  .dup-ticket-head .dt-id{font-size:.8rem}
+  .dup-ticket .dt-actions button{padding:7px 10px;font-size:.7rem}
+  .dup-ticket .dt-actions{justify-content:stretch}
+  .dup-ticket .dt-actions .dt-keep{flex:1}
+  .compare-row .cmp-vals{font-size:.78rem}
+  .best-day-card{padding:10px 12px}
+  .best-day-card .bd-total{font-size:1rem}
+  .ticket-item{padding:8px}
+  .recon-row{font-size:.74rem}
 }
 </style>
 </head>
@@ -304,11 +335,8 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 
 <!-- Tab: Sales -->
 <div class="tab-content" id="tab-sales">
-  <button class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;margin-bottom:16px" onclick="exportExcel()">
-    Exporter Excel (.xlsx)
-  </button>
-  <div class="card">
-    <h3>Periode</h3>
+  <!-- Always-visible header: period chips + the four big numbers -->
+  <div class="card period-card">
     <div class="quick-chips" id="quick-chips">
       <button class="chip" data-range="all">Tout</button>
       <button class="chip" data-range="today">Aujourd'hui</button>
@@ -331,48 +359,75 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
         <button class="btn btn-primary btn-sm" onclick="applyCustomRange()">Appliquer</button>
       </div>
     </div>
-    <div id="period-label" style="margin-top:10px;font-size:.8rem;color:var(--text-light)"></div>
+    <div id="period-label" style="margin-top:8px;font-size:.78rem;color:var(--text-light)"></div>
   </div>
   <div class="stats-grid" id="stats-grid"></div>
   <div class="stats-breakdown" id="stats-breakdown"></div>
-  <div id="best-day-mount"></div>
-  <div class="card">
-    <h3>Comparaison</h3>
-    <div id="compare-list"></div>
+
+  <!-- Sub-tab nav: Apercu / Verification / Produits / Tickets -->
+  <div class="subtab-nav" role="tablist">
+    <button class="subtab-btn active" data-subtab="overview">Apercu</button>
+    <button class="subtab-btn" data-subtab="verification">Verification <span class="subtab-badge" id="recon-badge" style="display:none"></span></button>
+    <button class="subtab-btn" data-subtab="products">Produits</button>
+    <button class="subtab-btn" data-subtab="tickets">Tickets</button>
   </div>
-  <div class="card" id="reconciliation-card">
-    <h3>Verification des donnees <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(integrite des tickets)</span></h3>
-    <div id="recon-list"></div>
-  </div>
-  <div class="card">
-    <h3>Top 10 Produits <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(cliquer pour details)</span></h3>
-    <div id="top-products"></div>
-  </div>
-  <div class="card" id="edit-log-card" style="display:none">
-    <h3>Historique des modifications <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(local, 50 dernieres)</span></h3>
-    <div id="edit-log-list"></div>
-    <div style="margin-top:10px;text-align:right">
-      <button class="btn btn-outline btn-sm" onclick="clearEditLog()">Effacer l'historique local</button>
+
+  <!-- Sub-view: Apercu -->
+  <div class="subtab-content active" id="subtab-overview">
+    <div id="best-day-mount"></div>
+    <div class="card">
+      <h3>Comparaison</h3>
+      <div id="compare-list"></div>
     </div>
   </div>
-  <div class="card">
-    <h3>Tickets
-      <span style="font-weight:400;font-size:.75rem;margin-left:8px">Trier par:</span>
-      <button class="sort-btn active" id="sort-date" onclick="setSortTickets('date')">Date</button>
-      <button class="sort-btn" id="sort-total" onclick="setSortTickets('total')">Total</button>
-    </h3>
-    <div class="ticket-summary" id="ticket-summary"></div>
-    <div id="tickets-list"></div>
-    <div class="load-more-row" id="load-more-row" style="display:none">
-      <button class="btn btn-outline btn-sm" onclick="loadMoreTickets()">Charger plus</button>
+
+  <!-- Sub-view: Verification -->
+  <div class="subtab-content" id="subtab-verification">
+    <div class="card" id="reconciliation-card">
+      <h3>Verification des donnees <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(integrite des tickets)</span></h3>
+      <div id="recon-list"></div>
+    </div>
+    <div class="card" id="edit-log-card" style="display:none">
+      <h3>Historique des modifications <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(local, 50 dernieres)</span></h3>
+      <div id="edit-log-list"></div>
+      <div style="margin-top:10px;text-align:right">
+        <button class="btn btn-outline btn-sm" onclick="clearEditLog()">Effacer l'historique local</button>
+      </div>
     </div>
   </div>
-  <div class="card">
-    <h3>Exporter</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-blue btn-sm" onclick="exportJSON('products')">Produits JSON</button>
-      <button class="btn btn-blue btn-sm" onclick="exportJSON('tickets')">Tickets JSON</button>
-      <button class="btn btn-blue btn-sm" onclick="exportJSON('backup')">Backup JSON</button>
+
+  <!-- Sub-view: Produits -->
+  <div class="subtab-content" id="subtab-products">
+    <div class="card">
+      <h3>Top 10 Produits <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(cliquer pour details)</span></h3>
+      <div id="top-products"></div>
+    </div>
+  </div>
+
+  <!-- Sub-view: Tickets -->
+  <div class="subtab-content" id="subtab-tickets">
+    <button class="btn btn-green" style="width:100%;padding:12px;font-size:.95rem;margin-bottom:12px" onclick="exportExcel()">
+      Exporter Excel (.xlsx)
+    </button>
+    <div class="card">
+      <h3>Tickets
+        <span style="font-weight:400;font-size:.75rem;margin-left:8px">Trier par:</span>
+        <button class="sort-btn active" id="sort-date" onclick="setSortTickets('date')">Date</button>
+        <button class="sort-btn" id="sort-total" onclick="setSortTickets('total')">Total</button>
+      </h3>
+      <div class="ticket-summary" id="ticket-summary"></div>
+      <div id="tickets-list"></div>
+      <div class="load-more-row" id="load-more-row" style="display:none">
+        <button class="btn btn-outline btn-sm" onclick="loadMoreTickets()">Charger plus</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Exporter (JSON)</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-blue btn-sm" onclick="exportJSON('products')">Produits</button>
+        <button class="btn btn-blue btn-sm" onclick="exportJSON('tickets')">Tickets</button>
+        <button class="btn btn-blue btn-sm" onclick="exportJSON('backup')">Backup complet</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1185,6 +1240,23 @@ function clearFilter(){
   });
 })();
 
+// Sales sub-tab switching (Apercu / Verification / Produits / Tickets)
+let currentSubtab='overview';
+function setSalesSubtab(name){
+  currentSubtab=name;
+  document.querySelectorAll('.subtab-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.subtab===name);
+  });
+  document.querySelectorAll('.subtab-content').forEach(c=>{
+    c.classList.toggle('active',c.id==='subtab-'+name);
+  });
+}
+(function bindSubtabs(){
+  document.querySelectorAll('.subtab-btn').forEach(b=>{
+    b.addEventListener('click',()=>setSalesSubtab(b.dataset.subtab));
+  });
+})();
+
 function loadMoreTickets(){
   displayedTicketCount+=50;
   renderSales();
@@ -1471,7 +1543,14 @@ function renderReconciliation(){
   if(!card||!list) return;
   const tix=filteredTickets||tickets;
   const iss=findReconciliationIssues(tix);
+  // Total = mismatch tickets + duplicate clusters + empty + missing-price
   const total=iss.mismatch.length+iss.duplicates.length+iss.empty.length+iss.noPrice.length;
+  // Update sub-tab badge
+  const badge=document.getElementById('recon-badge');
+  if(badge){
+    if(total>0){badge.textContent=total;badge.style.display='inline-block'}
+    else{badge.style.display='none'}
+  }
   card.style.display='block';
   if(total===0){
     list.innerHTML='<div class="recon-clean">Toutes les sommes correspondent — aucun probleme detecte sur la periode</div>';
