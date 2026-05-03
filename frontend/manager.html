@@ -104,6 +104,27 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .ticket-summary span{color:var(--accent)}
 .sort-btn{padding:4px 10px;font-size:.7rem;border:1px solid var(--border);border-radius:6px;background:var(--card);cursor:pointer;font-weight:500}
 .sort-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.quick-chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:7px 14px;font-size:.78rem;border-radius:18px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-weight:600;color:var(--text);transition:all .15s}
+.chip:hover{background:var(--bg)}
+.chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.stat-card.lifetime{background:linear-gradient(135deg,#fff8f4 0%,#ffe9da 100%);border:1px solid var(--accent)}
+.stat-card.lifetime .stat-value{color:var(--accent-dark)}
+.stat-card.lifetime .stat-label{font-weight:600;color:var(--accent-dark)}
+.stats-breakdown{font-size:.75rem;color:var(--text-light);margin:-4px 0 12px;padding:4px 6px;display:flex;gap:14px;flex-wrap:wrap}
+.stats-breakdown b{color:var(--text);font-weight:600}
+.rank-item.clickable{cursor:pointer;padding:8px 6px;border-radius:6px;transition:background .15s}
+.rank-item.clickable:hover{background:var(--bg)}
+.rank-item .rank-rev{color:var(--text-light);font-size:.75rem;margin-left:6px}
+.load-more-row{text-align:center;margin-top:10px}
+.product-detail-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.pds-card{background:var(--bg);border-radius:8px;padding:10px;text-align:center}
+.pds-value{font-size:1.05rem;font-weight:700;color:var(--accent)}
+.pds-label{font-size:.7rem;color:var(--text-light);margin-top:2px}
+.pd-ticket-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.8rem;gap:8px;flex-wrap:wrap}
+.pd-ticket-row:last-child{border:none}
+.pd-ticket-row .pd-date{color:var(--text-light);font-size:.72rem}
+.pd-ticket-row .pd-qty{font-weight:700;color:var(--accent)}
 /* Ingredients */
 .ingredient-tag{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:4px 10px;font-size:.8rem;margin:3px}
 .ingredient-tag button{background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;font-weight:700;line-height:1;padding:0 2px}
@@ -231,24 +252,36 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
   <button class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;margin-bottom:16px" onclick="exportExcel()">
     Exporter Excel (.xlsx)
   </button>
-  <div class="stats-grid" id="stats-grid"></div>
   <div class="card">
-    <h3>Filtrer</h3>
-    <div class="ticket-filter-row">
-      <input type="date" id="date-from" style="min-width:130px">
-      <input type="date" id="date-to" style="min-width:130px">
-      <select id="status-filter" style="min-width:120px">
-        <option value="">Tous</option>
-        <option value="new">Nouveau</option>
-        <option value="preparing">En cours</option>
-        <option value="done">Termine</option>
-      </select>
-      <button class="btn btn-primary btn-sm" onclick="filterSales()">Filtrer</button>
-      <button class="btn btn-outline btn-sm" onclick="clearFilter()">Effacer</button>
+    <h3>Periode</h3>
+    <div class="quick-chips" id="quick-chips">
+      <button class="chip" data-range="all">Tout</button>
+      <button class="chip" data-range="today">Aujourd'hui</button>
+      <button class="chip" data-range="week">7 jours</button>
+      <button class="chip active" data-range="month">Ce mois</button>
+      <button class="chip" data-range="lastmonth">Mois dernier</button>
+      <button class="chip" data-range="year">Cette annee</button>
+      <button class="chip" data-range="custom">Personnalise</button>
     </div>
+    <div id="custom-range" style="display:none;margin-top:10px">
+      <div class="ticket-filter-row">
+        <input type="date" id="date-from" style="min-width:130px">
+        <input type="date" id="date-to" style="min-width:130px">
+        <select id="status-filter" style="min-width:120px">
+          <option value="">Tous statuts</option>
+          <option value="new">Nouveau</option>
+          <option value="preparing">En cours</option>
+          <option value="done">Termine</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="applyCustomRange()">Appliquer</button>
+      </div>
+    </div>
+    <div id="period-label" style="margin-top:10px;font-size:.8rem;color:var(--text-light)"></div>
   </div>
+  <div class="stats-grid" id="stats-grid"></div>
+  <div class="stats-breakdown" id="stats-breakdown"></div>
   <div class="card">
-    <h3>Top 10 Produits</h3>
+    <h3>Top 10 Produits <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(cliquer pour details)</span></h3>
     <div id="top-products"></div>
   </div>
   <div class="card">
@@ -259,6 +292,9 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     </h3>
     <div class="ticket-summary" id="ticket-summary"></div>
     <div id="tickets-list"></div>
+    <div class="load-more-row" id="load-more-row" style="display:none">
+      <button class="btn btn-outline btn-sm" onclick="loadMoreTickets()">Charger plus</button>
+    </div>
   </div>
   <div class="card">
     <h3>Exporter</h3>
@@ -420,6 +456,22 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-edit-ticket')">Annuler</button>
       <button class="btn btn-primary" id="modal-edit-ticket-btn">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Product Detail Modal -->
+<div class="modal-overlay hidden" id="modal-product-detail">
+  <div class="modal-box wide">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+      <h3 id="pd-title" style="margin:0">Produit</h3>
+      <span id="pd-period" style="font-size:.75rem;color:var(--text-light)"></span>
+    </div>
+    <div class="product-detail-stats" id="pd-stats"></div>
+    <h4 style="font-size:.85rem;margin:10px 0 6px;color:var(--text)">Derniers tickets</h4>
+    <div id="pd-tickets" style="max-height:260px;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeModal('modal-product-detail')">Fermer</button>
     </div>
   </div>
 </div>
@@ -640,7 +692,7 @@ async function syncFromServer(){
   await loadProducts();
   await loadTickets();
   renderProducts();
-  renderSales();
+  applyRangeFilter();
   dot.className='sync-dot online';txt.textContent='Connecte (serveur)';
   toast('Donnees synchronisees','success');
 }
@@ -662,9 +714,30 @@ async function loadProducts(){
   products.forEach((p,i)=>{if(!p.id)p.id=i+1});
 }
 async function loadTickets(){
-  const remote = await sbGet('tickets','order=id.desc');
-  if(remote && Array.isArray(remote)){
-    tickets=remote;saveLocal('tickets',tickets);
+  // Supabase REST caps each response at 1000 rows. Page through until empty
+  // so totals are computed on the full history.
+  const PAGE = 1000;
+  const MAX_PAGES = 50; // safety: 50k tickets max
+  const all = [];
+  for(let page=0; page<MAX_PAGES; page++){
+    const from = page*PAGE;
+    const to = from + PAGE - 1;
+    let chunk = null;
+    try{
+      const r = await fetch(SUPABASE_URL+'/rest/v1/tickets?order=id.desc',{
+        headers:{...SB_HEADERS,'Range-Unit':'items','Range':from+'-'+to},
+        signal:AbortSignal.timeout(8000)
+      });
+      if(!r.ok) throw new Error(r.status);
+      chunk = await r.json();
+      if(Array.isArray(chunk)) chunk.forEach(sbParseItems);
+    }catch(e){ chunk = null; break; }
+    if(!Array.isArray(chunk) || chunk.length===0) break;
+    all.push(...chunk);
+    if(chunk.length < PAGE) break; // last page
+  }
+  if(all.length>0){
+    tickets=all;saveLocal('tickets',tickets);
   }else{
     tickets=loadLocal('tickets')||[];
   }
@@ -690,7 +763,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById(btn.dataset.tab).classList.add('active');
     const fab=document.getElementById('fab-add');
     fab.style.display=btn.dataset.tab==='tab-products'?'flex':'none';
-    if(btn.dataset.tab==='tab-sales')renderSales();
+    if(btn.dataset.tab==='tab-sales')applyRangeFilter();
     if(btn.dataset.tab==='tab-categories')renderCategories();
     if(btn.dataset.tab==='tab-settings'){renderPinFields();renderIngredients()}
   });
@@ -919,12 +992,15 @@ async function deleteCategory(cat,count){
 // ===== Sales Tab =====
 let ticketSortBy='date'; // 'date' or 'total'
 let ticketSortDir=-1; // -1 = descending
+let currentRange='month'; // active quick-range chip
+let displayedTicketCount=50; // pagination cursor for the tickets list
 
 function setSortTickets(field){
   if(ticketSortBy===field){ticketSortDir*=-1}
   else{ticketSortBy=field;ticketSortDir=-1}
   document.getElementById('sort-date').classList.toggle('active',ticketSortBy==='date');
   document.getElementById('sort-total').classList.toggle('active',ticketSortBy==='total');
+  displayedTicketCount=50;
   renderSales();
 }
 
@@ -939,37 +1015,178 @@ function statusClass(s){
   return 'new';
 }
 
+// ── Tunis-time helpers (UTC+1, no DST in modern Tunisia, but Intl handles it) ──
+const TUNIS_TZ='Africa/Tunis';
+const TUNIS_DATE_FMT=new Intl.DateTimeFormat('sv-SE',{timeZone:TUNIS_TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+function tunisDateKey(d){
+  if(!d) return '';
+  const dt=(d instanceof Date)?d:new Date(d);
+  if(isNaN(dt)) return '';
+  return TUNIS_DATE_FMT.format(dt); // sv-SE → "YYYY-MM-DD"
+}
+function getTicketDate(t){
+  return t.created_at||t.date||t.timestamp||'';
+}
+function getTicketDateKey(t){
+  return tunisDateKey(getTicketDate(t));
+}
+// Date math on YYYY-MM-DD strings (no timezone drift since we never call new Date with it)
+function ymdAddDays(key,n){
+  const [y,m,d]=key.split('-').map(Number);
+  const dt=new Date(Date.UTC(y,m-1,d));
+  dt.setUTCDate(dt.getUTCDate()+n);
+  return dt.toISOString().slice(0,10);
+}
+function ymdFirstOfMonth(key){return key.slice(0,7)+'-01'}
+function ymdLastOfMonth(key){
+  const [y,m]=key.split('-').map(Number);
+  const dt=new Date(Date.UTC(y,m,0)); // day 0 of next month = last of this
+  return dt.toISOString().slice(0,10);
+}
+
+// ── Quick-range computation ──
+function getRangeBounds(name){
+  const today=tunisDateKey(new Date());
+  switch(name){
+    case 'all': return {from:'',to:'',label:'Tout'};
+    case 'today': return {from:today,to:today,label:"Aujourd'hui"};
+    case 'week':  return {from:ymdAddDays(today,-6),to:today,label:'7 derniers jours'};
+    case 'month': return {from:ymdFirstOfMonth(today),to:today,label:'Ce mois'};
+    case 'lastmonth':{
+      const prevAnchor=ymdAddDays(ymdFirstOfMonth(today),-1);
+      return {from:ymdFirstOfMonth(prevAnchor),to:ymdLastOfMonth(prevAnchor),label:'Mois dernier'};
+    }
+    case 'year':  return {from:today.slice(0,4)+'-01-01',to:today,label:'Cette annee'};
+    case 'custom':{
+      const f=document.getElementById('date-from').value;
+      const tt=document.getElementById('date-to').value;
+      const lbl=(f||'…')+' → '+(tt||'…');
+      return {from:f,to:tt,label:'Personnalise: '+lbl};
+    }
+  }
+  return {from:'',to:'',label:''};
+}
+
+function setQuickRange(name){
+  currentRange=name;
+  document.querySelectorAll('#quick-chips .chip').forEach(c=>{
+    c.classList.toggle('active',c.dataset.range===name);
+  });
+  document.getElementById('custom-range').style.display=name==='custom'?'block':'none';
+  applyRangeFilter();
+}
+
+function applyCustomRange(){applyRangeFilter()}
+
+function applyRangeFilter(){
+  const {from,to}=getRangeBounds(currentRange);
+  const statusVal=document.getElementById('status-filter')?.value||'';
+  if(!from && !to && !statusVal){
+    filteredTickets=null;
+  }else{
+    filteredTickets=tickets.filter(t=>{
+      const dk=getTicketDateKey(t);
+      if(from && dk<from) return false;
+      if(to && dk>to) return false;
+      if(statusVal && (t.status||'new')!==statusVal) return false;
+      return true;
+    });
+  }
+  displayedTicketCount=50;
+  renderSales();
+}
+
+// Backward-compat shims (kept so any external caller / older bookmarks still work)
+function filterSales(){applyRangeFilter()}
+function clearFilter(){
+  document.getElementById('date-from').value='';
+  document.getElementById('date-to').value='';
+  document.getElementById('status-filter').value='';
+  setQuickRange('all');
+}
+
+// Wire up the chips after DOM is ready (script runs after the elements)
+(function bindChips(){
+  const root=document.getElementById('quick-chips');
+  if(!root) return;
+  root.querySelectorAll('.chip').forEach(b=>{
+    b.addEventListener('click',()=>setQuickRange(b.dataset.range));
+  });
+})();
+
+function loadMoreTickets(){
+  displayedTicketCount+=50;
+  renderSales();
+}
+
 function renderSales(){
+  // Period view (filtered) — drives the period stats and ticket list
   const tix=filteredTickets||tickets;
-  // Stats
   const totalTND=tix.reduce((s,t)=>s+(t.total||0),0);
   const count=tix.length;
-  const today=new Date().toISOString().slice(0,10);
-  const todayTix=tix.filter(t=>(t.created_at||t.created_at||t.date||t.timestamp||'').slice(0,10)===today);
-  const todayTND=todayTix.reduce((s,t)=>s+(t.total||0),0);
-  const weekAgo=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
-  const weekTix=tix.filter(t=>(t.created_at||t.created_at||t.date||t.timestamp||'').slice(0,10)>=weekAgo);
-  const weekTND=weekTix.reduce((s,t)=>s+(t.total||0),0);
+  const avgTicket=count>0?totalTND/count:0;
+
+  // Lifetime view — never filtered, drives the "Depuis le début" card
+  const lifetimeTND=tickets.reduce((s,t)=>s+(t.total||0),0);
+  const lifetimeCount=tickets.length;
+
+  // Status breakdown over the period
+  const breakdown={new:{c:0,s:0},preparing:{c:0,s:0},done:{c:0,s:0}};
+  tix.forEach(t=>{
+    const k=t.status||'new';
+    if(!breakdown[k]) breakdown[k]={c:0,s:0};
+    breakdown[k].c++; breakdown[k].s+=(t.total||0);
+  });
+
+  // Period label
+  const {label}=getRangeBounds(currentRange);
+  const periodEl=document.getElementById('period-label');
+  if(periodEl) periodEl.textContent='Periode active: '+label;
+
+  // Stats grid
   document.getElementById('stats-grid').innerHTML=`
-    <div class="stat-card"><div class="stat-value">${totalTND.toFixed(3)}</div><div class="stat-label">Total TND</div></div>
-    <div class="stat-card"><div class="stat-value">${count}</div><div class="stat-label">Tickets</div></div>
-    <div class="stat-card"><div class="stat-value">${todayTND.toFixed(3)}</div><div class="stat-label">Aujourd'hui</div></div>
-    <div class="stat-card"><div class="stat-value">${weekTND.toFixed(3)}</div><div class="stat-label">Cette semaine</div></div>`;
-  // Top 10
-  const prodCount={};
-  tix.forEach(t=>(t.items||[]).forEach(it=>{prodCount[it.name]=(prodCount[it.name]||0)+(it.qty||it.quantity||1)}));
-  const top=Object.entries(prodCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  document.getElementById('top-products').innerHTML=top.length?top.map((t,i)=>`<div class="rank-item"><span><span class="rank-num">#${i+1}</span>${t[0]}</span><span>${t[1]}</span></div>`).join(''):'<p style="color:var(--text-light)">Aucune vente</p>';
+    <div class="stat-card"><div class="stat-value">${totalTND.toFixed(3)}</div><div class="stat-label">Total periode (TND)</div></div>
+    <div class="stat-card"><div class="stat-value">${count}</div><div class="stat-label">Tickets periode</div></div>
+    <div class="stat-card"><div class="stat-value">${avgTicket.toFixed(3)}</div><div class="stat-label">Ticket moyen (TND)</div></div>
+    <div class="stat-card lifetime"><div class="stat-value">${lifetimeTND.toFixed(3)}</div><div class="stat-label">Depuis le debut (${lifetimeCount} tickets)</div></div>`;
+
+  // Breakdown line
+  document.getElementById('stats-breakdown').innerHTML=
+    `<span><b>Termines:</b> ${breakdown.done.c} (${breakdown.done.s.toFixed(3)} TND)</span>`+
+    `<span><b>En cours:</b> ${breakdown.preparing.c} (${breakdown.preparing.s.toFixed(3)} TND)</span>`+
+    `<span><b>Nouveaux:</b> ${breakdown.new.c} (${breakdown.new.s.toFixed(3)} TND)</span>`;
+
+  // Top 10 with revenue + clickable
+  const prodAgg={};
+  tix.forEach(t=>(t.items||[]).forEach(it=>{
+    if(!it||!it.name) return;
+    const q=it.qty||it.quantity||1;
+    const p=it.price||0;
+    if(!prodAgg[it.name]) prodAgg[it.name]={qty:0,rev:0};
+    prodAgg[it.name].qty+=q;
+    prodAgg[it.name].rev+=q*p;
+  }));
+  const top=Object.entries(prodAgg).sort((a,b)=>b[1].qty-a[1].qty).slice(0,10);
+  document.getElementById('top-products').innerHTML=top.length
+    ? top.map(([name,a],i)=>`<div class="rank-item clickable" onclick="showProductDetail(${JSON.stringify(name).replace(/"/g,'&quot;')})">
+        <span><span class="rank-num">#${i+1}</span>${name}<span class="rank-rev">${a.rev.toFixed(3)} TND</span></span>
+        <span>${a.qty}</span>
+      </div>`).join('')
+    : '<p style="color:var(--text-light)">Aucune vente</p>';
+
   // Ticket summary
-  document.getElementById('ticket-summary').innerHTML=`<div>${count} ticket${count>1?'s':''} | Total: <span>${totalTND.toFixed(3)} TND</span></div>`;
-  // Tickets sorted
+  document.getElementById('ticket-summary').innerHTML=
+    `<div>${count} ticket${count>1?'s':''} sur la periode | Total: <span>${totalTND.toFixed(3)} TND</span></div>`;
+
+  // Sorted tickets — paginated, no silent slice cap
   const sorted=[...tix].sort((a,b)=>{
-    if(ticketSortBy==='total'){return ticketSortDir*((a.total||0)-(b.total||0))}
-    const da=a.created_at||a.date||a.timestamp||'';const db=b.created_at||b.date||b.timestamp||'';
+    if(ticketSortBy==='total') return ticketSortDir*((a.total||0)-(b.total||0));
+    const da=getTicketDate(a), db=getTicketDate(b);
     return ticketSortDir*(da>db?1:da<db?-1:0);
   });
-  document.getElementById('tickets-list').innerHTML=sorted.slice(0,50).map(t=>{
-    const d=t.date||t.timestamp||t.created_at||'';
+  const slice=sorted.slice(0,displayedTicketCount);
+  document.getElementById('tickets-list').innerHTML=slice.map(t=>{
+    const d=getTicketDate(t);
     const st=t.status||'new';
     const tid=t.id||'';
     const sessionId=t.session_id||t.session||'--';
@@ -999,27 +1216,81 @@ function renderSales(){
       </div>
     </div>`;
   }).join('')||'<p style="color:var(--text-light)">Aucun ticket</p>';
+
+  // "Charger plus" pagination + counter
+  const moreRow=document.getElementById('load-more-row');
+  if(moreRow){
+    if(slice.length<sorted.length){
+      moreRow.style.display='block';
+      moreRow.querySelector('button').textContent=`Charger plus (${slice.length} / ${sorted.length})`;
+    }else{
+      moreRow.style.display=sorted.length>50?'block':'none';
+      if(sorted.length>50){
+        moreRow.querySelector('button').textContent=`Affiches: ${sorted.length} / ${sorted.length}`;
+        moreRow.querySelector('button').disabled=true;
+      }else{
+        moreRow.querySelector('button').disabled=false;
+      }
+    }
+  }
 }
 
-function filterSales(){
-  const from=document.getElementById('date-from').value;
-  const to=document.getElementById('date-to').value;
-  const statusVal=document.getElementById('status-filter').value;
-  filteredTickets=tickets.filter(t=>{
-    const d=(t.created_at||t.created_at||t.date||t.timestamp||'').slice(0,10);
-    if(from&&d<from)return false;
-    if(to&&d>to)return false;
-    if(statusVal&&(t.status||'new')!==statusVal)return false;
-    return true;
+// ── Product detail drill-down ──
+function showProductDetail(name){
+  const tix=filteredTickets||tickets;
+  let qty=0, rev=0;
+  const days=new Set();
+  const containing=[];
+  let firstDate='', lastDate='';
+  for(const t of tix){
+    const items=t.items||[];
+    let qInThis=0, revInThis=0;
+    for(const it of items){
+      if(it && it.name===name){
+        const q=it.qty||it.quantity||1;
+        const p=it.price||0;
+        qInThis+=q; revInThis+=q*p;
+      }
+    }
+    if(qInThis>0){
+      qty+=qInThis; rev+=revInThis;
+      const d=getTicketDate(t);
+      const dk=tunisDateKey(d);
+      if(dk) days.add(dk);
+      if(d){
+        if(!firstDate||d<firstDate) firstDate=d;
+        if(!lastDate||d>lastDate) lastDate=d;
+      }
+      containing.push({t, qty:qInThis, rev:revInThis});
+    }
+  }
+  const avgPrice=qty>0?rev/qty:0;
+  const avgPerActiveDay=days.size>0?qty/days.size:0;
+  const {label:periodLabel}=getRangeBounds(currentRange);
+
+  document.getElementById('pd-title').textContent=name;
+  document.getElementById('pd-period').textContent='Periode: '+periodLabel;
+  document.getElementById('pd-stats').innerHTML=`
+    <div class="pds-card"><div class="pds-value">${qty}</div><div class="pds-label">Quantite vendue</div></div>
+    <div class="pds-card"><div class="pds-value">${rev.toFixed(3)}</div><div class="pds-label">Revenu (TND)</div></div>
+    <div class="pds-card"><div class="pds-value">${avgPrice.toFixed(3)}</div><div class="pds-label">Prix moyen</div></div>
+    <div class="pds-card"><div class="pds-value">${days.size}</div><div class="pds-label">Jours vendus</div></div>
+    <div class="pds-card"><div class="pds-value">${avgPerActiveDay.toFixed(1)}</div><div class="pds-label">Moy. / jour actif</div></div>
+    <div class="pds-card"><div class="pds-value" style="font-size:.85rem">${firstDate?formatDateTime(firstDate).split(' ')[0]:'--'}<br><span style="font-size:.7rem;color:var(--text-light)">→ ${lastDate?formatDateTime(lastDate).split(' ')[0]:'--'}</span></div><div class="pds-label">Premiere → Derniere</div></div>`;
+
+  containing.sort((a,b)=>{
+    const da=getTicketDate(a.t), db=getTicketDate(b.t);
+    return da>db?-1:da<db?1:0;
   });
-  renderSales();
-}
-function clearFilter(){
-  filteredTickets=null;
-  document.getElementById('date-from').value='';
-  document.getElementById('date-to').value='';
-  document.getElementById('status-filter').value='';
-  renderSales();
+  const recent=containing.slice(0,10);
+  document.getElementById('pd-tickets').innerHTML=recent.length
+    ? recent.map(r=>`<div class="pd-ticket-row">
+        <span><span style="color:var(--accent);font-weight:700">#${r.t.id||''}</span> <span class="pd-date">${formatDateTime(getTicketDate(r.t))}</span></span>
+        <span><span class="pd-qty">${r.qty}x</span> <span style="color:var(--text-light)">·</span> ${r.rev.toFixed(3)} TND</span>
+      </div>`).join('')
+    : '<p style="color:var(--text-light);padding:10px 0">Aucun ticket</p>';
+
+  document.getElementById('modal-product-detail').classList.remove('hidden');
 }
 
 // ===== Ticket CRUD =====
@@ -1212,7 +1483,7 @@ async function saveEditedTicket(){
   }
   saveLocal('tickets',tickets);
   closeModal('modal-edit-ticket');
-  renderSales();
+  applyRangeFilter();
   toast('Ticket mis a jour');
   editTicketData=null;
 }
@@ -1306,7 +1577,7 @@ function importBackup(){
 
       updateImportProgress(90,'Chargement des donnees...');
       await loadTickets();
-      renderProducts();renderSales();renderCategories();
+      renderProducts();applyRangeFilter();renderCategories();
       updateImportProgress(100,'Termine!');
 
       // Build result message
