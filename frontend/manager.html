@@ -158,13 +158,16 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .pd-horizon-chips .chip{padding:5px 12px;font-size:.72rem;font-weight:600}
 /* Restructure the product modal: sticky header + scrollable body */
 .modal-box.wide.pd-modal-box{display:flex;flex-direction:column;padding:0;max-height:90vh;overflow:hidden}
+.pd-drag-handle{display:none}
 .pd-modal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--card);flex-shrink:0;border-radius:12px 12px 0 0}
 .pd-modal-header .pd-header-text{flex:1;min-width:0}
 .pd-modal-header h3{margin:0;font-size:1rem;color:var(--text);line-height:1.3}
 .pd-modal-header #pd-period{display:block;font-size:.72rem;color:var(--text-light);margin-top:2px}
 .pd-close-x{background:none;border:none;font-size:1.7rem;line-height:1;color:var(--text-light);cursor:pointer;padding:0;width:34px;height:34px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s}
 .pd-close-x:hover{background:var(--bg);color:var(--text)}
-.pd-modal-body{padding:14px 18px 18px;overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch}
+.pd-modal-body{padding:14px 18px 18px;overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+/* Lock background scroll while a modal is open */
+body.modal-open{overflow:hidden;position:fixed;width:100%}
 .compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap}
 .compare-row:last-child{border:none}
 .compare-row .cmp-label{font-size:.85rem;font-weight:600;color:var(--text)}
@@ -319,9 +322,10 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
   .ticket-item{padding:8px}
   .recon-row{font-size:.74rem}
   /* Product modal as a bottom sheet on phones */
-  #modal-product-detail.modal-overlay{align-items:flex-end;padding:0}
-  #modal-product-detail .modal-box.wide.pd-modal-box{max-width:none;width:100%;max-height:92vh;border-radius:16px 16px 0 0;animation:pdSlideUp .25s ease}
-  #modal-product-detail .pd-modal-header{padding:12px 14px;border-radius:16px 16px 0 0}
+  #modal-product-detail.modal-overlay{align-items:flex-end;padding:0;background:rgba(0,0,0,.55)}
+  #modal-product-detail .modal-box.wide.pd-modal-box{max-width:none;width:100%;max-height:80vh;max-height:80dvh;border-radius:18px 18px 0 0;animation:pdSlideUp .25s ease;padding-bottom:env(safe-area-inset-bottom,0)}
+  #modal-product-detail .pd-drag-handle{display:block;width:40px;height:4px;border-radius:2px;background:#d1d1d6;margin:8px auto 0;flex-shrink:0}
+  #modal-product-detail .pd-modal-header{padding:8px 14px 10px;border-radius:0;border-bottom:1px solid var(--border)}
   #modal-product-detail .pd-modal-header h3{font-size:.95rem}
   #modal-product-detail .pd-modal-body{padding:12px 14px 16px}
   #modal-product-detail .product-detail-stats{grid-template-columns:1fr 1fr;gap:6px}
@@ -664,6 +668,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 <!-- Product Detail Modal -->
 <div class="modal-overlay hidden" id="modal-product-detail">
   <div class="modal-box wide pd-modal-box">
+    <div class="pd-drag-handle" aria-hidden="true"></div>
     <div class="pd-modal-header">
       <div class="pd-header-text">
         <h3 id="pd-title">Produit</h3>
@@ -2194,6 +2199,7 @@ function showProductDetail(name){
   const pdBody=document.querySelector('#modal-product-detail .pd-modal-body');
   if(pdBody) pdBody.scrollTop=0;
   document.getElementById('modal-product-detail').classList.remove('hidden');
+  syncBodyLock();
 }
 
 // State + helpers for the forecast chips inside the product modal
@@ -2732,9 +2738,23 @@ function removeIngredient(idx){
 }
 
 // ===== Modals =====
-function closeModal(id){document.getElementById(id).classList.add('hidden')}
+function syncBodyLock(){
+  // Body locks when ANY modal-overlay is visible (i.e. not .hidden)
+  const anyOpen=Array.from(document.querySelectorAll('.modal-overlay')).some(m=>!m.classList.contains('hidden'));
+  document.body.classList.toggle('modal-open',anyOpen);
+}
+function closeModal(id){
+  document.getElementById(id).classList.add('hidden');
+  syncBodyLock();
+}
 document.querySelectorAll('.modal-overlay').forEach(m=>{
-  m.addEventListener('click',e=>{if(e.target===m)m.classList.add('hidden')});
+  m.addEventListener('click',e=>{if(e.target===m){m.classList.add('hidden');syncBodyLock()}});
+});
+// Auto-sync body lock whenever any .modal-overlay class changes
+// (covers callers that show modals via direct classList.remove without going through a helper)
+const _modalLockObserver=new MutationObserver(syncBodyLock);
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  _modalLockObserver.observe(m,{attributes:true,attributeFilter:['class']});
 });
 
 // ===== Init =====
