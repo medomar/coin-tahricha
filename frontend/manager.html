@@ -166,8 +166,9 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .pd-close-x{background:none;border:none;font-size:1.7rem;line-height:1;color:var(--text-light);cursor:pointer;padding:0;width:34px;height:34px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s}
 .pd-close-x:hover{background:var(--bg);color:var(--text)}
 .pd-modal-body{padding:14px 18px 18px;overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
-/* Lock background scroll while a modal is open */
-body.modal-open{overflow:hidden;position:fixed;width:100%}
+/* Lock background scroll while a modal is open. JS sets `top` to the saved scrollY
+   (negative) so the page visually stays where the user was; on unlock JS restores. */
+body.modal-open{overflow:hidden;position:fixed;left:0;right:0;width:100%}
 .compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap}
 .compare-row:last-child{border:none}
 .compare-row .cmp-label{font-size:.85rem;font-weight:600;color:var(--text)}
@@ -2195,7 +2196,8 @@ function showProductDetail(name){
       </div>`).join('')
     : '<p style="color:var(--text-light);padding:10px 0">Aucun ticket</p>';
 
-  // Always start at the top when the modal opens
+  // Always start compact: every collapsible closed, body scrolled to top
+  document.querySelectorAll('#modal-product-detail details.pd-collapsible').forEach(d=>d.removeAttribute('open'));
   const pdBody=document.querySelector('#modal-product-detail .pd-modal-body');
   if(pdBody) pdBody.scrollTop=0;
   document.getElementById('modal-product-detail').classList.remove('hidden');
@@ -2738,10 +2740,23 @@ function removeIngredient(idx){
 }
 
 // ===== Modals =====
+// Body lock: save the current scrollY before fixing the body, restore it on unlock.
+// This prevents iOS Safari from visually jumping the page to top when a modal opens,
+// which is what was making scroll feel "stuck" — the underlying page had been silently
+// scrolled to 0 and snapped back when the modal closed.
+let _savedScrollY=0;
 function syncBodyLock(){
-  // Body locks when ANY modal-overlay is visible (i.e. not .hidden)
   const anyOpen=Array.from(document.querySelectorAll('.modal-overlay')).some(m=>!m.classList.contains('hidden'));
-  document.body.classList.toggle('modal-open',anyOpen);
+  const isLocked=document.body.classList.contains('modal-open');
+  if(anyOpen && !isLocked){
+    _savedScrollY=window.scrollY||window.pageYOffset||0;
+    document.body.style.top='-'+_savedScrollY+'px';
+    document.body.classList.add('modal-open');
+  } else if(!anyOpen && isLocked){
+    document.body.classList.remove('modal-open');
+    document.body.style.top='';
+    window.scrollTo(0,_savedScrollY);
+  }
 }
 function closeModal(id){
   document.getElementById(id).classList.add('hidden');
