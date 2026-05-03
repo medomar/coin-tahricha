@@ -127,6 +127,28 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
 /* Item extras (ingredient modifications) */
 .item-extras{font-size:.75rem;font-style:italic;color:var(--muted);margin-left:30px;padding:1px 0}
 
+/* Bulk validate banner */
+.bulk-bar{display:none;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#fff8f4 0%,#ffe9da 100%);border:1px solid #ff6b35;border-radius:12px;padding:12px 16px;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+.bulk-bar.show{display:flex}
+.bulk-bar .bulk-info{display:flex;flex-direction:column;gap:2px}
+.bulk-bar .bulk-count{font-size:.95rem;font-weight:700;color:#e55a28}
+.bulk-bar .bulk-sub{font-size:.75rem;color:#a3531e}
+.bulk-btn{padding:10px 20px;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);color:#fff;box-shadow:0 3px 8px rgba(34,197,94,.3);transition:transform .1s,opacity .15s}
+.bulk-btn:hover{opacity:.92}
+.bulk-btn:active{transform:scale(.97)}
+.bulk-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* Confirm dialog (mini-modal) */
+.kitchen-confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:none;align-items:center;justify-content:center;padding:16px}
+.kitchen-confirm-overlay.show{display:flex}
+.kitchen-confirm-box{background:#fff;border-radius:14px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 30px rgba(0,0,0,.3)}
+.kitchen-confirm-box h3{font-size:1.05rem;margin-bottom:8px;color:#222}
+.kitchen-confirm-box p{font-size:.88rem;color:#444;margin-bottom:18px;line-height:1.5}
+.kitchen-confirm-actions{display:flex;gap:10px;justify-content:flex-end}
+.kitchen-confirm-actions button{padding:10px 18px;border-radius:8px;border:none;font-weight:700;cursor:pointer;font-size:.85rem}
+.kc-cancel{background:#e5e7eb;color:#222}
+.kc-confirm{background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%);color:#fff}
+
 /* Done orders section */
 .done-section{margin-top:20px;border-top:2px solid var(--border);padding-top:12px}
 .done-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 4px;user-select:none}
@@ -222,6 +244,13 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
 </header>
 
 <div class="main" id="main-area">
+  <div class="bulk-bar" id="bulk-bar">
+    <div class="bulk-info">
+      <span class="bulk-count" id="bulk-count">0 commande en attente</span>
+      <span class="bulk-sub">Marquer toutes les commandes actives comme termin&eacute;es</span>
+    </div>
+    <button class="bulk-btn" id="bulk-validate-btn" onclick="window._bulkValidateAsk()">&#10004; Tout valider</button>
+  </div>
   <div class="order-grid" id="order-grid"></div>
   <div class="empty-state" id="empty-state" style="display:none">
     <div class="icon">&#10004;</div>
@@ -243,6 +272,18 @@ header{background:var(--surface);padding:10px 16px;display:flex;justify-content:
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Bulk validate confirm dialog -->
+<div class="kitchen-confirm-overlay" id="bulk-confirm">
+  <div class="kitchen-confirm-box">
+    <h3>Valider toutes les commandes ?</h3>
+    <p id="bulk-confirm-msg">Vous &ecirc;tes sur le point de marquer comme termin&eacute;es toutes les commandes actuellement en attente. Continuer ?</p>
+    <div class="kitchen-confirm-actions">
+      <button class="kc-cancel" onclick="window._bulkValidateCancel()">Annuler</button>
+      <button class="kc-confirm" onclick="window._bulkValidateConfirm()">Oui, tout valider</button>
+    </div>
+  </div>
+</div>
 </div>
 
 <script>
@@ -495,6 +536,20 @@ function initApp() {
         return new Date(b.created_at) - new Date(a.created_at);
       });
 
+    // Update bulk-validate banner visibility/count
+    var bulkBar = document.getElementById('bulk-bar');
+    var bulkCount = document.getElementById('bulk-count');
+    var bulkBtn = document.getElementById('bulk-validate-btn');
+    if (bulkBar && bulkCount) {
+      if (active.length > 0) {
+        bulkBar.classList.add('show');
+        bulkCount.textContent = active.length + ' commande' + (active.length > 1 ? 's' : '') + ' en attente';
+        if (bulkBtn) { bulkBtn.disabled = false; bulkBtn.textContent = '✔ Tout valider (' + active.length + ')'; }
+      } else {
+        bulkBar.classList.remove('show');
+      }
+    }
+
     if (!active.length) {
       grid.style.display = 'none';
       empty.style.display = 'flex';
@@ -704,6 +759,54 @@ function initApp() {
       return now - new Date(d.done_at).getTime() < DONE_TTL;
     });
   }
+
+  // ── Bulk validate (mark every active ticket done in one shot) ──
+  window._bulkValidateAsk = function() {
+    var active = Object.values(orders).filter(function(o) {
+      return o.status === 'new' || o.status === 'preparing' || o.status === 'en_preparation';
+    });
+    if (!active.length) return;
+    var msg = 'Vous êtes sur le point de marquer comme terminées ' +
+              active.length + ' commande' + (active.length > 1 ? 's' : '') +
+              ' actuellement en attente. Continuer ?';
+    var msgEl = document.getElementById('bulk-confirm-msg');
+    if (msgEl) msgEl.textContent = msg;
+    document.getElementById('bulk-confirm').classList.add('show');
+  };
+
+  window._bulkValidateCancel = function() {
+    document.getElementById('bulk-confirm').classList.remove('show');
+  };
+
+  window._bulkValidateConfirm = function() {
+    document.getElementById('bulk-confirm').classList.remove('show');
+    var btn = document.getElementById('bulk-validate-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Validation...'; }
+    var ids = Object.values(orders).filter(function(o) {
+      return o.status === 'new' || o.status === 'preparing' || o.status === 'en_preparation';
+    }).map(function(o) { return o.id; });
+
+    if (!ids.length) return;
+
+    // Update each ticket: locally first (so UI feels instant), then via API
+    ids.forEach(function(id) {
+      var order = orders[id];
+      if (!order) return;
+      // Snapshot to done list
+      addToDoneList(order);
+      order.status = 'done';
+      // Fire-and-queue the server update (or queue offline)
+      updateTicketStatus(id, 'done');
+      // Schedule eviction from active map
+      doneTimers[id] = setTimeout(function() {
+        delete orders[id];
+        delete doneTimers[id];
+      }, 30000);
+    });
+
+    render();
+    showToast(ids.length + ' commande' + (ids.length > 1 ? 's' : '') + ' validée' + (ids.length > 1 ? 's' : '') + ' !');
+  };
 
   // ── Tap handler ──
   window._kitchenTap = function(ticketId, status) {
