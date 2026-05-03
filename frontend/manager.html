@@ -144,6 +144,30 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .recon-row .rr-detail{color:var(--text-light);font-size:.72rem;margin-top:2px}
 .recon-row .rr-action{font-size:.7rem;color:var(--blue);font-weight:600}
 .recon-clean{background:#e8f5e9;color:#2e7d32;padding:8px 12px;border-radius:6px;font-size:.8rem;font-weight:600;text-align:center}
+.dup-cluster{border:1px solid #fcd9b6;background:#fff8f4;border-radius:8px;padding:10px;margin-bottom:10px}
+.dup-cluster-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #fcd9b6}
+.dup-cluster-head .dch-title{font-weight:700;font-size:.85rem;color:#b04a18}
+.dup-cluster-head .dch-meta{font-size:.72rem;color:#7a3d12}
+.dup-cluster-head .dch-dismiss{font-size:.7rem;color:var(--text-light);background:none;border:1px solid var(--border);padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:500}
+.dup-cluster-head .dch-dismiss:hover{background:#fff}
+.dup-ticket{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px}
+.dup-ticket.recommended{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
+.dup-ticket-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.dup-ticket-head .dt-id{font-weight:700;color:var(--accent);font-size:.85rem}
+.dup-ticket-head .dt-when{color:var(--text-light);font-size:.72rem}
+.dup-ticket .dt-recommended{display:inline-block;font-size:.65rem;background:var(--green);color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px;font-weight:700}
+.dup-ticket .dt-items{font-size:.75rem;color:var(--text);padding:4px 0;border-top:1px dashed var(--border);margin-top:4px}
+.dup-ticket .dt-items div{padding:1px 0;display:flex;justify-content:space-between;gap:6px}
+.dup-ticket .dt-items .dti-name{flex:1}
+.dup-ticket .dt-items .dti-line{color:var(--accent);font-weight:600}
+.dup-ticket .dt-totals{font-size:.72rem;color:var(--text-light);padding:4px 0 6px}
+.dup-ticket .dt-mismatch{color:var(--red);font-weight:700}
+.dup-ticket .dt-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.dup-ticket .dt-actions button{padding:6px 10px;font-size:.72rem;border:1px solid var(--border);border-radius:6px;background:var(--card);cursor:pointer;font-weight:600}
+.dup-ticket .dt-actions .dt-keep{background:var(--green);color:#fff;border-color:var(--green)}
+.dup-ticket .dt-actions .dt-keep:hover{opacity:.92}
+.dup-ticket .dt-actions .dt-inspect{background:var(--card);color:var(--blue);border-color:var(--blue)}
+.dup-ticket .dt-actions .dt-del{background:var(--red);color:#fff;border-color:var(--red)}
 .edit-log-row{padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:.78rem;background:var(--card)}
 .edit-log-row .elr-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px}
 .edit-log-row .elr-id{color:var(--accent);font-weight:700}
@@ -1302,8 +1326,14 @@ function renderBestDay(){
 }
 
 // ── Reconciliation: surface tickets where data integrity is suspect ──
+// Dismissed-duplicate clusters (manager confirmed "not a duplicate")
+const DISMISSED_DUPS_KEY='cointahricha_dismissed_dups';
+function loadDismissedDups(){try{return new Set(JSON.parse(localStorage.getItem(DISMISSED_DUPS_KEY))||[])}catch(e){return new Set()}}
+function saveDismissedDups(set){localStorage.setItem(DISMISSED_DUPS_KEY,JSON.stringify([...set]))}
+function clusterKey(ids){return [...ids].map(String).sort((a,b)=>(+a||0)-(+b||0)).join('-')}
+
 function findReconciliationIssues(tix){
-  const mismatch=[], duplicates=[], empty=[], noPrice=[];
+  const mismatch=[], empty=[], noPrice=[];
   for(const t of tix){
     const stored=ticketStoredMillimes(t);
     const computed=ticketComputedMillimes(t);
@@ -1315,29 +1345,124 @@ function findReconciliationIssues(tix){
       if(i && (i.price===null||i.price===undefined)){noPrice.push({t,item:i});break}
     }
   }
-  // Duplicate detection: same session_id, same total, within 30s
+
+  // Duplicate detection — collect raw pairs, then cluster via Union-Find
+  // so #207-#208-#209 all triggered in pair-mode collapse into ONE cluster.
   const bySession={};
   for(const t of tix){
     const k=t.session_id||'_none';
     if(!bySession[k]) bySession[k]=[];
     bySession[k].push(t);
   }
+  const parent={};
+  function find(x){if(parent[x]!==x){parent[x]=find(parent[x])}return parent[x]}
+  function union(a,b){const ra=find(a),rb=find(b); if(ra!==rb) parent[ra]=rb}
+
+  const flagged=new Set(); // ticket ids that are part of any duplicate pair
   for(const k of Object.keys(bySession)){
     const list=bySession[k].slice().sort((a,b)=>{
       const da=getTicketDate(a), db=getTicketDate(b);
       return da>db?1:da<db?-1:0;
     });
-    for(let i=1;i<list.length;i++){
-      const a=list[i-1], b=list[i];
-      const da=new Date(getTicketDate(a)), dbe=new Date(getTicketDate(b));
-      if(isNaN(da)||isNaN(dbe)) continue;
-      const gap=Math.abs(dbe-da);
-      if(gap<=30000 && ticketStoredMillimes(a)===ticketStoredMillimes(b) && (a.total||0)>0){
-        duplicates.push({a,b,gap});
+    for(let i=0;i<list.length;i++){
+      // Compare ticket[i] with subsequent ones whose timestamp is within 30s
+      // (a-b-c chain merges naturally via union)
+      for(let j=i+1;j<list.length;j++){
+        const a=list[i], b=list[j];
+        const da=new Date(getTicketDate(a)), dbe=new Date(getTicketDate(b));
+        if(isNaN(da)||isNaN(dbe)) break;
+        const gap=Math.abs(dbe-da);
+        if(gap>30000) break; // sorted, so further ones are even further apart
+        if(ticketStoredMillimes(a)!==ticketStoredMillimes(b)) continue;
+        if((a.total||0)<=0) continue;
+        const ia=String(a.id), ib=String(b.id);
+        if(!(ia in parent)) parent[ia]=ia;
+        if(!(ib in parent)) parent[ib]=ib;
+        union(ia,ib);
+        flagged.add(ia); flagged.add(ib);
       }
     }
   }
+
+  // Group ticket ids by their root parent → clusters
+  const clustersById={};
+  const ticketById={};
+  for(const t of tix){ if(t && t.id!=null) ticketById[String(t.id)]=t; }
+  for(const id of flagged){
+    const root=find(id);
+    if(!clustersById[root]) clustersById[root]=[];
+    clustersById[root].push(id);
+  }
+
+  const dismissed=loadDismissedDups();
+  const duplicates=[];
+  for(const ids of Object.values(clustersById)){
+    if(ids.length<2) continue;
+    const key=clusterKey(ids);
+    if(dismissed.has(key)) continue;
+    const ticketsInCluster=ids
+      .map(id=>ticketById[id])
+      .filter(Boolean)
+      .sort((a,b)=>{
+        const da=getTicketDate(a), db=getTicketDate(b);
+        return da>db?1:da<db?-1:0;
+      });
+    if(ticketsInCluster.length<2) continue;
+    duplicates.push({
+      key,
+      tickets: ticketsInCluster,
+      total: ticketsInCluster[0].total||0,
+      session_id: ticketsInCluster[0].session_id
+    });
+  }
+  // Most recent cluster first
+  duplicates.sort((a,b)=>{
+    const da=getTicketDate(a.tickets[a.tickets.length-1]);
+    const db=getTicketDate(b.tickets[b.tickets.length-1]);
+    return da>db?-1:da<db?1:0;
+  });
+
   return {mismatch,duplicates,empty,noPrice};
+}
+
+// ── Bulk delete + dismiss helpers used by duplicate clusters ──
+async function bulkDeleteTickets(ids){
+  let deleted=0;
+  for(const id of ids){
+    if(isOnline){
+      try{ await sbDelete('tickets','id',id); }catch(e){}
+    }
+    tickets=tickets.filter(t=>String(t.id)!==String(id));
+    deleted++;
+  }
+  saveLocal('tickets',tickets);
+  return deleted;
+}
+
+async function keepThisOne(keepId, otherIds){
+  const list=otherIds.map(String);
+  if(list.length===0) return;
+  const msg='Garder le ticket #'+keepId+' et SUPPRIMER '+list.length+' autre'+(list.length>1?'s':'')+' ('+list.map(i=>'#'+i).join(', ')+') ?\n\nCette action est definitive.';
+  if(!confirm(msg)) return;
+  const n=await bulkDeleteTickets(list);
+  toast(n+' ticket'+(n>1?'s':'')+' supprime'+(n>1?'s':''));
+  applyRangeFilter();
+}
+
+function dismissDuplicateCluster(key){
+  if(!confirm('Marquer ce groupe comme verifie (pas un doublon) ? Il ne reapparaitra plus dans cette liste.')) return;
+  const set=loadDismissedDups();
+  set.add(key);
+  saveDismissedDups(set);
+  toast('Groupe ignore');
+  renderReconciliation();
+}
+
+function clearDismissedDups(){
+  if(!confirm('Reafficher tous les groupes precedemment ignores ?')) return;
+  localStorage.removeItem(DISMISSED_DUPS_KEY);
+  toast('Liste des groupes ignores reinitialisee');
+  renderReconciliation();
 }
 
 function renderReconciliation(){
@@ -1369,17 +1494,58 @@ function renderReconciliation(){
     html+='</div>';
   }
   if(iss.duplicates.length){
-    html+=`<div class="recon-section"><h4><span>Doublons potentiels</span><span class="badge-count">${iss.duplicates.length}</span></h4>`;
-    iss.duplicates.slice(0,10).forEach(r=>{
-      html+=`<div class="recon-row" onclick="editTicket(${r.b.id||0})">
-        <div class="rr-info">
-          <div><span class="rr-id">#${r.a.id||''}</span> ↔ <span class="rr-id">#${r.b.id||''}</span> · ${fromMillimes(ticketStoredMillimes(r.b))} TND</div>
-          <div class="rr-detail">${formatDateTime(getTicketDate(r.b))} · ecart ${Math.round(r.gap/1000)}s · meme session</div>
-        </div>
-        <span class="rr-action">Inspecter →</span>
-      </div>`;
+    const totalDupTickets=iss.duplicates.reduce((s,c)=>s+c.tickets.length,0);
+    const dismissedCount=loadDismissedDups().size;
+    html+=`<div class="recon-section"><h4><span>Doublons potentiels (${iss.duplicates.length} groupe${iss.duplicates.length>1?'s':''}, ${totalDupTickets} tickets concernes)</span><span class="badge-count">${iss.duplicates.length}</span></h4>`;
+    html+=`<div style="font-size:.72rem;color:var(--text-light);margin:0 0 8px;line-height:1.4">Chaque groupe rassemble les tickets d'une meme session avec le meme total dans un intervalle de 30 secondes — comparez les articles avant de decider lequel garder.</div>`;
+    iss.duplicates.slice(0,10).forEach(cluster=>{
+      const items=cluster.tickets;
+      // Recommended = oldest (first chronologically)
+      const recommendedId=String(items[0].id);
+      const lastWhen=formatDateTime(getTicketDate(items[items.length-1]));
+      html+=`<div class="dup-cluster">
+        <div class="dup-cluster-head">
+          <div>
+            <div class="dch-title">Groupe de ${items.length} tickets · ${fromMillimes(ticketStoredMillimes(items[0]))} TND chacun</div>
+            <div class="dch-meta">Session ${cluster.session_id||'--'} · dernier: ${lastWhen}</div>
+          </div>
+          <button class="dch-dismiss" onclick="dismissDuplicateCluster('${cluster.key}')">Pas un doublon</button>
+        </div>`;
+      items.forEach(t=>{
+        const tid=String(t.id);
+        const isReco=tid===recommendedId;
+        const stored=ticketStoredMillimes(t);
+        const computed=ticketComputedMillimes(t);
+        const mismatch=stored!==computed;
+        const others=items.filter(o=>String(o.id)!==tid).map(o=>o.id);
+        const otherIdsArg=JSON.stringify(others);
+        const itemsHtml=(t.items||[]).map(i=>{
+          const q=+(i.qty||i.quantity||0)||0;
+          const lineMil=q*toMillimes(i.price);
+          return `<div><span class="dti-name">${q}x ${i.name||'(sans nom)'}</span><span class="dti-line">${fromMillimes(lineMil)} TND</span></div>`;
+        }).join('')||'<div style="color:var(--text-light)">Aucun article</div>';
+        html+=`<div class="dup-ticket${isReco?' recommended':''}">
+          <div class="dup-ticket-head">
+            <span class="dt-id">#${t.id}${isReco?' <span class="dt-recommended">A garder (le plus ancien)</span>':''}</span>
+            <span class="dt-when">${formatDateTime(getTicketDate(t))} · ${statusLabel(t.status||'new')}</span>
+          </div>
+          <div class="dt-items">${itemsHtml}</div>
+          <div class="dt-totals">
+            Total stocke: <b>${fromMillimes(stored)} TND</b>
+            ${mismatch?` · <span class="dt-mismatch">calcule: ${fromMillimes(computed)} TND</span>`:''}
+          </div>
+          <div class="dt-actions">
+            <button class="dt-inspect" onclick="editTicket(${t.id})">Voir / Modifier</button>
+            <button class="dt-keep" onclick='keepThisOne(${t.id},${otherIdsArg})'>Garder, supprimer les ${others.length} autre${others.length>1?'s':''}</button>
+          </div>
+        </div>`;
+      });
+      html+=`</div>`;
     });
-    if(iss.duplicates.length>10) html+=`<div style="font-size:.72rem;color:var(--text-light);margin-top:4px">+${iss.duplicates.length-10} autres…</div>`;
+    if(iss.duplicates.length>10) html+=`<div style="font-size:.72rem;color:var(--text-light);margin-top:4px">+${iss.duplicates.length-10} groupes supplementaires (filtrer la periode pour reduire la liste)</div>`;
+    if(dismissedCount>0){
+      html+=`<div style="text-align:right;margin-top:6px"><button class="btn btn-outline btn-sm" onclick="clearDismissedDups()">Reafficher ${dismissedCount} groupe${dismissedCount>1?'s':''} ignore${dismissedCount>1?'s':''}</button></div>`;
+    }
     html+='</div>';
   }
   if(iss.empty.length){
