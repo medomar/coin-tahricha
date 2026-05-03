@@ -125,6 +125,27 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .pd-ticket-row:last-child{border:none}
 .pd-ticket-row .pd-date{color:var(--text-light);font-size:.72rem}
 .pd-ticket-row .pd-qty{font-weight:700;color:var(--accent)}
+.pd-section{margin:14px 0 6px}
+.pd-section h4{font-size:.85rem;margin-bottom:6px;color:var(--text);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pd-section h4 .pd-h-info{color:var(--text-light);font-size:.7rem;font-weight:500}
+.pd-bar-row{display:grid;grid-template-columns:54px 1fr 36px;align-items:center;gap:6px;padding:2px 0;font-size:.72rem}
+.pd-bar-row .pd-bar-label{color:var(--text-light);font-weight:600}
+.pd-bar-row .pd-bar-track{background:var(--bg);border-radius:4px;height:14px;overflow:hidden;position:relative}
+.pd-bar-row .pd-bar-fill{height:100%;background:linear-gradient(90deg,#ffb088 0%,var(--accent) 100%);border-radius:4px;min-width:2px;transition:width .25s}
+.pd-bar-row.peak .pd-bar-fill{background:linear-gradient(90deg,var(--accent) 0%,var(--accent-dark) 100%)}
+.pd-bar-row.empty .pd-bar-fill{background:var(--border);opacity:.4}
+.pd-bar-row .pd-bar-val{text-align:right;font-weight:700;color:var(--text)}
+.pd-trend-grid{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;align-items:end;height:60px;margin:6px 0 4px}
+.pd-trend-bar{background:linear-gradient(180deg,var(--accent) 0%,#ffb088 100%);border-radius:3px 3px 0 0;min-height:3px;position:relative}
+.pd-trend-bar.empty{background:var(--border);opacity:.5}
+.pd-trend-axis{display:flex;justify-content:space-between;font-size:.65rem;color:var(--text-light);margin-top:2px}
+.pd-forecast{background:linear-gradient(135deg,#fff8f4 0%,#ffe9da 100%);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px}
+.pd-forecast .pdf-label{font-size:.72rem;color:#a3531e;font-weight:600;line-height:1.3}
+.pd-forecast .pdf-value{font-size:1.1rem;font-weight:800;color:var(--accent-dark)}
+.pd-forecast .pdf-sub{font-size:.65rem;color:var(--text-light);margin-top:2px}
+.pd-insight{font-size:.72rem;color:var(--text-light);margin-top:4px;padding:4px 8px;background:var(--bg);border-radius:6px}
+.pd-insight b{color:var(--text)}
+.pd-no-data{color:var(--text-light);font-size:.78rem;font-style:italic;padding:6px 0}
 .compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap}
 .compare-row:last-child{border:none}
 .compare-row .cmp-label{font-size:.85rem;font-weight:600;color:var(--text)}
@@ -594,8 +615,32 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
       <span id="pd-period" style="font-size:.75rem;color:var(--text-light)"></span>
     </div>
     <div class="product-detail-stats" id="pd-stats"></div>
-    <h4 style="font-size:.85rem;margin:10px 0 6px;color:var(--text)">Derniers tickets</h4>
-    <div id="pd-tickets" style="max-height:260px;overflow-y:auto"></div>
+
+    <div class="pd-section">
+      <h4>Repartition par heure <span class="pd-h-info" id="pd-hour-info"></span></h4>
+      <div id="pd-by-hour"></div>
+      <div class="pd-insight" id="pd-hour-insight" style="display:none"></div>
+    </div>
+
+    <div class="pd-section">
+      <h4>Repartition par jour de la semaine <span class="pd-h-info" id="pd-dow-info"></span></h4>
+      <div id="pd-by-dow"></div>
+      <div class="pd-insight" id="pd-dow-insight" style="display:none"></div>
+    </div>
+
+    <div class="pd-section">
+      <h4>Tendance — 14 derniers jours <span class="pd-h-info" id="pd-trend-info"></span></h4>
+      <div class="pd-trend-grid" id="pd-trend"></div>
+      <div class="pd-trend-axis"><span>il y a 13j</span><span>aujourd'hui</span></div>
+    </div>
+
+    <div class="pd-section">
+      <h4>Estimation pour les 7 prochains jours</h4>
+      <div class="pd-forecast" id="pd-forecast"></div>
+    </div>
+
+    <h4 style="font-size:.85rem;margin:14px 0 6px;color:var(--text)">Derniers tickets</h4>
+    <div id="pd-tickets" style="max-height:240px;overflow-y:auto"></div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeModal('modal-product-detail')">Fermer</button>
     </div>
@@ -1150,6 +1195,24 @@ function tunisDateKey(d){
   if(isNaN(dt)) return '';
   return TUNIS_DATE_FMT.format(dt); // sv-SE → "YYYY-MM-DD"
 }
+const TUNIS_HOUR_FMT=new Intl.DateTimeFormat('en-GB',{timeZone:TUNIS_TZ,hour:'2-digit',hour12:false});
+function tunisHour(d){
+  const dt=(d instanceof Date)?d:new Date(d);
+  if(isNaN(dt)) return -1;
+  // Returns string like "13" or "07" depending on Intl. parseInt is safe for both.
+  const h=parseInt(TUNIS_HOUR_FMT.format(dt),10);
+  return isNaN(h)?-1:(h%24);
+}
+function tunisDayOfWeek(d){
+  // 0=Lundi … 6=Dimanche (French week starts Monday)
+  const dk=tunisDateKey(d);
+  if(!dk) return -1;
+  const [y,m,day]=dk.split('-').map(Number);
+  const jsDow=new Date(Date.UTC(y,m-1,day)).getUTCDay(); // 0=Sun..6=Sat
+  return (jsDow+6)%7; // shift so 0=Mon..6=Sun
+}
+const DOW_LABELS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+const DOW_LABELS_SHORT=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 function getTicketDate(t){
   return t.created_at||t.date||t.timestamp||'';
 }
@@ -1870,6 +1933,136 @@ function showProductDetail(name){
     <div class="pds-card"><div class="pds-value">${days.size}</div><div class="pds-label">Jours vendus</div></div>
     <div class="pds-card"><div class="pds-value">${avgPerActiveDay.toFixed(1)}</div><div class="pds-label">Moy. / jour actif</div></div>
     <div class="pds-card"><div class="pds-value" style="font-size:.85rem">${firstDate?formatDateTime(firstDate).split(' ')[0]:'--'}<br><span style="font-size:.7rem;color:var(--text-light)">→ ${lastDate?formatDateTime(lastDate).split(' ')[0]:'--'}</span></div><div class="pds-label">Premiere → Derniere</div></div>`;
+
+  // ── Hour-of-day distribution (Tunis local) ──
+  const byHour=new Array(24).fill(0);
+  // ── Day-of-week distribution (0=Mon … 6=Sun, Tunis local) ──
+  const byDow=new Array(7).fill(0);
+  // ── Per-Tunis-day quantity (used for trend + forecast) ──
+  const byDate={};
+  for(const c of containing){
+    const ts=getTicketDate(c.t);
+    const h=tunisHour(ts), w=tunisDayOfWeek(ts), dk=tunisDateKey(ts);
+    if(h>=0) byHour[h]+=c.qty;
+    if(w>=0) byDow[w]+=c.qty;
+    if(dk) byDate[dk]=(byDate[dk]||0)+c.qty;
+  }
+
+  // Render hour bars
+  const hourMax=Math.max(1,...byHour);
+  const hourTotal=byHour.reduce((s,v)=>s+v,0);
+  const hourPeak=byHour.indexOf(hourMax);
+  const peakHourPct=hourTotal>0?Math.round((hourMax/hourTotal)*100):0;
+  document.getElementById('pd-hour-info').textContent=hourTotal>0?(hourTotal+' ventes localisees'):'';
+  document.getElementById('pd-by-hour').innerHTML=hourTotal>0
+    ? byHour.map((v,h)=>{
+        const pct=hourMax>0?(v/hourMax)*100:0;
+        const cls=v===0?'empty':(h===hourPeak?'peak':'');
+        return `<div class="pd-bar-row ${cls}">
+          <span class="pd-bar-label">${String(h).padStart(2,'0')}h-${String((h+1)%24).padStart(2,'0')}h</span>
+          <div class="pd-bar-track"><div class="pd-bar-fill" style="width:${pct}%"></div></div>
+          <span class="pd-bar-val">${v}</span>
+        </div>`;
+      }).join('')
+    : '<div class="pd-no-data">Aucune donnee horaire pour cette periode</div>';
+  const hourInsightEl=document.getElementById('pd-hour-insight');
+  if(hourTotal>0 && peakHourPct>15){
+    // Find a peak window of 3 contiguous hours with highest sum
+    let bestStart=hourPeak, bestSum=0;
+    for(let s=0;s<24;s++){
+      const sum=byHour[s]+byHour[(s+1)%24]+byHour[(s+2)%24];
+      if(sum>bestSum){bestSum=sum;bestStart=s}
+    }
+    const winPct=Math.round((bestSum/hourTotal)*100);
+    hourInsightEl.style.display='block';
+    hourInsightEl.innerHTML=`<b>Pic de ventes:</b> ${String(bestStart).padStart(2,'0')}h-${String((bestStart+3)%24).padStart(2,'0')}h (${winPct}% des ventes)`;
+  } else { hourInsightEl.style.display='none' }
+
+  // Render day-of-week bars
+  const dowMax=Math.max(1,...byDow);
+  const dowTotal=byDow.reduce((s,v)=>s+v,0);
+  const dowPeak=byDow.indexOf(dowMax);
+  document.getElementById('pd-dow-info').textContent=dowTotal>0?(dowTotal+' ventes localisees'):'';
+  document.getElementById('pd-by-dow').innerHTML=dowTotal>0
+    ? byDow.map((v,i)=>{
+        const pct=dowMax>0?(v/dowMax)*100:0;
+        const cls=v===0?'empty':(i===dowPeak?'peak':'');
+        return `<div class="pd-bar-row ${cls}">
+          <span class="pd-bar-label">${DOW_LABELS_SHORT[i]}</span>
+          <div class="pd-bar-track"><div class="pd-bar-fill" style="width:${pct}%"></div></div>
+          <span class="pd-bar-val">${v}</span>
+        </div>`;
+      }).join('')
+    : '<div class="pd-no-data">Aucune donnee pour cette periode</div>';
+  const dowInsightEl=document.getElementById('pd-dow-insight');
+  if(dowTotal>0){
+    const weekday=byDow.slice(0,5).reduce((s,v)=>s+v,0);
+    const weekend=byDow[5]+byDow[6];
+    const weekdayAvg=weekday/5, weekendAvg=weekend/2;
+    const ratio=weekendAvg>0?weekdayAvg/weekendAvg:0;
+    let txt=`<b>Plus vendu:</b> ${DOW_LABELS[dowPeak]}`;
+    if(weekday+weekend>=14){
+      if(ratio>1.4) txt+=` · plutot en semaine (${weekdayAvg.toFixed(1)}/jour vs ${weekendAvg.toFixed(1)} le week-end)`;
+      else if(ratio>0 && ratio<0.7) txt+=` · plutot le week-end (${weekendAvg.toFixed(1)}/jour vs ${weekdayAvg.toFixed(1)} en semaine)`;
+    }
+    dowInsightEl.style.display='block';
+    dowInsightEl.innerHTML=txt;
+  } else { dowInsightEl.style.display='none' }
+
+  // ── 14-day trend + 7-day forecast — independent of period filter (uses raw `tickets`) ──
+  // We want the trend of "actual recent activity" no matter what's filtered.
+  const recentByDate={};
+  const todayKey=tunisDateKey(new Date());
+  // Build set of last 14 day keys
+  const last14=[];
+  for(let i=13;i>=0;i--) last14.push(ymdAddDays(todayKey,-i));
+  for(const t of tickets){
+    const ts=getTicketDate(t);
+    const dk=tunisDateKey(ts);
+    if(!dk) continue;
+    if(last14.indexOf(dk)<0) continue;
+    let q=0;
+    for(const it of (t.items||[])){
+      if(it && it.name===name) q+=+(it.qty||it.quantity||0)||0;
+    }
+    if(q>0) recentByDate[dk]=(recentByDate[dk]||0)+q;
+  }
+  const trendValues=last14.map(k=>recentByDate[k]||0);
+  const trendMax=Math.max(1,...trendValues);
+  const trendTotal=trendValues.reduce((s,v)=>s+v,0);
+  document.getElementById('pd-trend-info').textContent=trendTotal>0?(trendTotal+' unites en 14j'):'aucune vente recente';
+  document.getElementById('pd-trend').innerHTML=trendValues.map((v,i)=>{
+    const pct=v>0?Math.max(6,(v/trendMax)*100):0;
+    const cls=v===0?'empty':'';
+    const dk=last14[i];
+    const [yy,mm,dd]=dk.split('-');
+    return `<div class="pd-trend-bar ${cls}" style="height:${pct}%" title="${dd}/${mm}: ${v}"></div>`;
+  }).join('');
+
+  // Forecast: average qty per day over the last 7 days × 7
+  const last7=trendValues.slice(7);
+  const last7Total=last7.reduce((s,v)=>s+v,0);
+  const avg7=last7Total/7;
+  const projected=Math.round(avg7*7);
+  const prevWeek=trendValues.slice(0,7).reduce((s,v)=>s+v,0);
+  let trendSignal='';
+  if(prevWeek===0 && last7Total===0) trendSignal='aucune vente sur 14 jours';
+  else if(prevWeek===0) trendSignal='nouvelle activite cette semaine';
+  else {
+    const change=Math.round(((last7Total-prevWeek)/prevWeek)*100);
+    if(change>10) trendSignal='en progression (+'+change+'% vs semaine precedente)';
+    else if(change<-10) trendSignal='en baisse ('+change+'% vs semaine precedente)';
+    else trendSignal='stable vs semaine precedente';
+  }
+  document.getElementById('pd-forecast').innerHTML=`
+    <div>
+      <div class="pdf-label">Estimation 7 prochains jours</div>
+      <div class="pdf-sub">Base sur la moyenne des 7 derniers jours (${avg7.toFixed(1)}/jour) — ${trendSignal}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="pdf-value">~ ${projected}</div>
+      <div class="pdf-sub">unites attendues</div>
+    </div>`;
 
   containing.sort((a,b)=>{
     const da=getTicketDate(a.t), db=getTicketDate(b.t);
