@@ -125,6 +125,37 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .pd-ticket-row:last-child{border:none}
 .pd-ticket-row .pd-date{color:var(--text-light);font-size:.72rem}
 .pd-ticket-row .pd-qty{font-weight:700;color:var(--accent)}
+.compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap}
+.compare-row:last-child{border:none}
+.compare-row .cmp-label{font-size:.85rem;font-weight:600;color:var(--text)}
+.compare-row .cmp-vals{font-size:.85rem;color:var(--text-light)}
+.compare-row .cmp-delta{font-size:.78rem;font-weight:700;padding:3px 10px;border-radius:12px;min-width:60px;text-align:center}
+.cmp-delta.up{background:#e8f5e9;color:#2e7d32}
+.cmp-delta.down{background:#ffebee;color:#c62828}
+.cmp-delta.flat{background:var(--bg);color:var(--text-light)}
+.recon-section{margin-bottom:10px}
+.recon-section:last-child{margin:0}
+.recon-section h4{font-size:.85rem;margin-bottom:6px;color:var(--red);display:flex;justify-content:space-between;align-items:center}
+.recon-section h4 .badge-count{background:var(--red);color:#fff;padding:1px 8px;border-radius:10px;font-size:.7rem;font-weight:700}
+.recon-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:.78rem;cursor:pointer;background:var(--card);gap:8px;flex-wrap:wrap}
+.recon-row:hover{background:var(--bg)}
+.recon-row .rr-info{flex:1;min-width:140px}
+.recon-row .rr-id{color:var(--accent);font-weight:700}
+.recon-row .rr-detail{color:var(--text-light);font-size:.72rem;margin-top:2px}
+.recon-row .rr-action{font-size:.7rem;color:var(--blue);font-weight:600}
+.recon-clean{background:#e8f5e9;color:#2e7d32;padding:8px 12px;border-radius:6px;font-size:.8rem;font-weight:600;text-align:center}
+.edit-log-row{padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:.78rem;background:var(--card)}
+.edit-log-row .elr-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px}
+.edit-log-row .elr-id{color:var(--accent);font-weight:700}
+.edit-log-row .elr-when{color:var(--text-light);font-size:.72rem}
+.edit-log-row .elr-diff{display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:.75rem}
+.edit-log-row .elr-orig{color:var(--text-light);text-decoration:line-through}
+.edit-log-row .elr-new{color:var(--green);font-weight:700}
+.edited-pill{display:inline-block;background:#fff8f4;color:var(--accent);border:1px solid var(--accent);font-size:.62rem;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:600}
+.best-day-card{background:linear-gradient(135deg,#fff8f4 0%,#ffe9da 100%);border:1px solid var(--accent);border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.best-day-card .bd-label{font-size:.78rem;color:var(--accent-dark);font-weight:600}
+.best-day-card .bd-date{font-size:.95rem;font-weight:700;color:var(--text)}
+.best-day-card .bd-total{font-size:1.1rem;font-weight:800;color:var(--accent-dark)}
 /* Ingredients */
 .ingredient-tag{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:4px 10px;font-size:.8rem;margin:3px}
 .ingredient-tag button{background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;font-weight:700;line-height:1;padding:0 2px}
@@ -280,9 +311,25 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
   </div>
   <div class="stats-grid" id="stats-grid"></div>
   <div class="stats-breakdown" id="stats-breakdown"></div>
+  <div id="best-day-mount"></div>
+  <div class="card">
+    <h3>Comparaison</h3>
+    <div id="compare-list"></div>
+  </div>
+  <div class="card" id="reconciliation-card">
+    <h3>Verification des donnees <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(integrite des tickets)</span></h3>
+    <div id="recon-list"></div>
+  </div>
   <div class="card">
     <h3>Top 10 Produits <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(cliquer pour details)</span></h3>
     <div id="top-products"></div>
+  </div>
+  <div class="card" id="edit-log-card" style="display:none">
+    <h3>Historique des modifications <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(local, 50 dernieres)</span></h3>
+    <div id="edit-log-list"></div>
+    <div style="margin-top:10px;text-align:right">
+      <button class="btn btn-outline btn-sm" onclick="clearEditLog()">Effacer l'historique local</button>
+    </div>
   </div>
   <div class="card">
     <h3>Tickets
@@ -1119,23 +1166,318 @@ function loadMoreTickets(){
   renderSales();
 }
 
+// ── Money in millimes (1 TND = 1000 millimes) — exact integer arithmetic ──
+function toMillimes(v){return Math.round((+v||0)*1000)}
+function fromMillimes(m){return (m/1000).toFixed(3)}
+function ticketStoredMillimes(t){return toMillimes(t.total)}
+function ticketComputedMillimes(t){
+  // Σ qty × price from items, in millimes — independent of stored total
+  let sum=0;
+  for(const i of (t.items||[])){
+    const q=+(i.qty||i.quantity||0)||0;
+    const p=toMillimes(i.price);
+    sum+=q*p;
+  }
+  return sum;
+}
+function sumMillimes(list){
+  let s=0; for(const t of list) s+=ticketStoredMillimes(t); return s;
+}
+
+// ── Period bounds in YYYY-MM-DD for arbitrary range names + previous-period mirror ──
+function bothBoundsForRange(name){
+  const today=tunisDateKey(new Date());
+  if(name==='all') return {from:'',to:'',prevFrom:'',prevTo:''};
+  const cur=getRangeBounds(name);
+  // Compute mirrored previous period
+  if(name==='today'){
+    const y=ymdAddDays(today,-1);
+    return {...cur, prevFrom:y, prevTo:y};
+  }
+  if(name==='week'){
+    return {...cur, prevFrom:ymdAddDays(cur.from,-7), prevTo:ymdAddDays(cur.from,-1)};
+  }
+  if(name==='month'){
+    const prevAnchor=ymdAddDays(ymdFirstOfMonth(today),-1);
+    return {...cur, prevFrom:ymdFirstOfMonth(prevAnchor), prevTo:ymdLastOfMonth(prevAnchor)};
+  }
+  if(name==='lastmonth'){
+    const prevAnchor=ymdAddDays(cur.from,-1);
+    return {...cur, prevFrom:ymdFirstOfMonth(prevAnchor), prevTo:ymdLastOfMonth(prevAnchor)};
+  }
+  if(name==='year'){
+    const prevYear=String(+today.slice(0,4)-1);
+    return {...cur, prevFrom:prevYear+'-01-01', prevTo:prevYear+'-12-31'};
+  }
+  if(name==='custom'){
+    if(!cur.from||!cur.to) return {...cur, prevFrom:'', prevTo:''};
+    const days=Math.round((new Date(cur.to)-new Date(cur.from))/86400000)+1;
+    return {...cur, prevFrom:ymdAddDays(cur.from,-days), prevTo:ymdAddDays(cur.from,-1)};
+  }
+  return {...cur, prevFrom:'', prevTo:''};
+}
+
+function ticketsInRange(from,to){
+  if(!from && !to) return tickets;
+  return tickets.filter(t=>{
+    const dk=getTicketDateKey(t);
+    if(from && dk<from) return false;
+    if(to && dk>to) return false;
+    return true;
+  });
+}
+
+// ── Comparison: current period vs previous equivalent ──
+function renderComparison(){
+  const el=document.getElementById('compare-list');
+  if(!el) return;
+  const {from,to,prevFrom,prevTo,label}=bothBoundsForRange(currentRange);
+  const cur=ticketsInRange(from,to);
+  const curRev=sumMillimes(cur);
+  const curN=cur.length;
+
+  if(currentRange==='all' || (!prevFrom && !prevTo)){
+    el.innerHTML=`<div style="color:var(--text-light);font-size:.85rem;padding:6px 0">Pas de comparaison disponible pour cette periode (${label}).</div>`;
+    return;
+  }
+  const prev=ticketsInRange(prevFrom,prevTo);
+  const prevRev=sumMillimes(prev);
+  const prevN=prev.length;
+
+  function delta(curV,prevV){
+    if(prevV===0) return {pct:curV>0?100:0, dir:curV>0?'up':'flat'};
+    const pct=((curV-prevV)/prevV)*100;
+    return {pct, dir:pct>1?'up':pct<-1?'down':'flat'};
+  }
+  function fmtDelta(d){
+    const s=(d.pct>0?'+':'')+d.pct.toFixed(1)+'%';
+    const arrow=d.dir==='up'?'▲':d.dir==='down'?'▼':'=';
+    return `<span class="cmp-delta ${d.dir}">${arrow} ${s}</span>`;
+  }
+  const dRev=delta(curRev,prevRev), dN=delta(curN,prevN);
+  el.innerHTML=
+    `<div class="compare-row">
+      <span class="cmp-label">Revenu</span>
+      <span class="cmp-vals">${fromMillimes(curRev)} TND <span style="opacity:.6">vs ${fromMillimes(prevRev)}</span></span>
+      ${fmtDelta(dRev)}
+    </div>
+    <div class="compare-row">
+      <span class="cmp-label">Tickets</span>
+      <span class="cmp-vals">${curN} <span style="opacity:.6">vs ${prevN}</span></span>
+      ${fmtDelta(dN)}
+    </div>`;
+}
+
+// ── Best day in the active period ──
+function renderBestDay(){
+  const mount=document.getElementById('best-day-mount');
+  if(!mount) return;
+  const tix=filteredTickets||tickets;
+  if(tix.length===0){mount.innerHTML='';return}
+  const byDay={};
+  for(const t of tix){
+    const dk=getTicketDateKey(t);
+    if(!dk) continue;
+    if(!byDay[dk]) byDay[dk]={rev:0,n:0};
+    byDay[dk].rev+=ticketStoredMillimes(t);
+    byDay[dk].n++;
+  }
+  let best=null;
+  for(const [dk,v] of Object.entries(byDay)){
+    if(!best || v.rev>best.rev) best={dk,...v};
+  }
+  if(!best){mount.innerHTML='';return}
+  const [y,m,d]=best.dk.split('-');
+  const formatted=`${d}/${m}/${y}`;
+  mount.innerHTML=`<div class="best-day-card">
+    <div>
+      <div class="bd-label">Meilleur jour de la periode</div>
+      <div class="bd-date">${formatted}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="bd-total">${fromMillimes(best.rev)} TND</div>
+      <div style="font-size:.75rem;color:var(--text-light)">${best.n} ticket${best.n>1?'s':''}</div>
+    </div>
+  </div>`;
+}
+
+// ── Reconciliation: surface tickets where data integrity is suspect ──
+function findReconciliationIssues(tix){
+  const mismatch=[], duplicates=[], empty=[], noPrice=[];
+  for(const t of tix){
+    const stored=ticketStoredMillimes(t);
+    const computed=ticketComputedMillimes(t);
+    if(Math.abs(stored-computed)>0 && (t.items||[]).length>0){
+      mismatch.push({t,stored,computed,delta:stored-computed});
+    }
+    if(!t.items||t.items.length===0) empty.push(t);
+    else for(const i of t.items){
+      if(i && (i.price===null||i.price===undefined)){noPrice.push({t,item:i});break}
+    }
+  }
+  // Duplicate detection: same session_id, same total, within 30s
+  const bySession={};
+  for(const t of tix){
+    const k=t.session_id||'_none';
+    if(!bySession[k]) bySession[k]=[];
+    bySession[k].push(t);
+  }
+  for(const k of Object.keys(bySession)){
+    const list=bySession[k].slice().sort((a,b)=>{
+      const da=getTicketDate(a), db=getTicketDate(b);
+      return da>db?1:da<db?-1:0;
+    });
+    for(let i=1;i<list.length;i++){
+      const a=list[i-1], b=list[i];
+      const da=new Date(getTicketDate(a)), dbe=new Date(getTicketDate(b));
+      if(isNaN(da)||isNaN(dbe)) continue;
+      const gap=Math.abs(dbe-da);
+      if(gap<=30000 && ticketStoredMillimes(a)===ticketStoredMillimes(b) && (a.total||0)>0){
+        duplicates.push({a,b,gap});
+      }
+    }
+  }
+  return {mismatch,duplicates,empty,noPrice};
+}
+
+function renderReconciliation(){
+  const card=document.getElementById('reconciliation-card');
+  const list=document.getElementById('recon-list');
+  if(!card||!list) return;
+  const tix=filteredTickets||tickets;
+  const iss=findReconciliationIssues(tix);
+  const total=iss.mismatch.length+iss.duplicates.length+iss.empty.length+iss.noPrice.length;
+  card.style.display='block';
+  if(total===0){
+    list.innerHTML='<div class="recon-clean">Toutes les sommes correspondent — aucun probleme detecte sur la periode</div>';
+    return;
+  }
+  let html='';
+  if(iss.mismatch.length){
+    html+=`<div class="recon-section"><h4><span>Total ne correspond pas aux articles</span><span class="badge-count">${iss.mismatch.length}</span></h4>`;
+    iss.mismatch.slice(0,10).forEach(r=>{
+      const sign=r.delta>0?'+':'';
+      html+=`<div class="recon-row" onclick="editTicket(${r.t.id||0})">
+        <div class="rr-info">
+          <div><span class="rr-id">#${r.t.id||''}</span> ${formatDateTime(getTicketDate(r.t))}</div>
+          <div class="rr-detail">Stocke ${fromMillimes(r.stored)} TND · Calcule ${fromMillimes(r.computed)} TND · Ecart ${sign}${fromMillimes(r.delta)} TND</div>
+        </div>
+        <span class="rr-action">Inspecter →</span>
+      </div>`;
+    });
+    if(iss.mismatch.length>10) html+=`<div style="font-size:.72rem;color:var(--text-light);margin-top:4px">+${iss.mismatch.length-10} autres…</div>`;
+    html+='</div>';
+  }
+  if(iss.duplicates.length){
+    html+=`<div class="recon-section"><h4><span>Doublons potentiels</span><span class="badge-count">${iss.duplicates.length}</span></h4>`;
+    iss.duplicates.slice(0,10).forEach(r=>{
+      html+=`<div class="recon-row" onclick="editTicket(${r.b.id||0})">
+        <div class="rr-info">
+          <div><span class="rr-id">#${r.a.id||''}</span> ↔ <span class="rr-id">#${r.b.id||''}</span> · ${fromMillimes(ticketStoredMillimes(r.b))} TND</div>
+          <div class="rr-detail">${formatDateTime(getTicketDate(r.b))} · ecart ${Math.round(r.gap/1000)}s · meme session</div>
+        </div>
+        <span class="rr-action">Inspecter →</span>
+      </div>`;
+    });
+    if(iss.duplicates.length>10) html+=`<div style="font-size:.72rem;color:var(--text-light);margin-top:4px">+${iss.duplicates.length-10} autres…</div>`;
+    html+='</div>';
+  }
+  if(iss.empty.length){
+    html+=`<div class="recon-section"><h4><span>Tickets sans articles</span><span class="badge-count">${iss.empty.length}</span></h4>`;
+    iss.empty.slice(0,5).forEach(t=>{
+      html+=`<div class="recon-row" onclick="editTicket(${t.id||0})">
+        <div class="rr-info">
+          <div><span class="rr-id">#${t.id||''}</span> ${formatDateTime(getTicketDate(t))} · ${(t.total||0).toFixed(3)} TND</div>
+        </div>
+        <span class="rr-action">Inspecter →</span>
+      </div>`;
+    });
+    html+='</div>';
+  }
+  if(iss.noPrice.length){
+    html+=`<div class="recon-section"><h4><span>Articles sans prix</span><span class="badge-count">${iss.noPrice.length}</span></h4>`;
+    iss.noPrice.slice(0,5).forEach(r=>{
+      html+=`<div class="recon-row" onclick="editTicket(${r.t.id||0})">
+        <div class="rr-info">
+          <div><span class="rr-id">#${r.t.id||''}</span> · article: ${r.item.name||'(sans nom)'}</div>
+          <div class="rr-detail">${formatDateTime(getTicketDate(r.t))}</div>
+        </div>
+        <span class="rr-action">Inspecter →</span>
+      </div>`;
+    });
+    html+='</div>';
+  }
+  list.innerHTML=html;
+}
+
+// ── Edit log (local) ──
+const EDIT_LOG_KEY='cointahricha_edit_log';
+function loadEditLog(){try{return JSON.parse(localStorage.getItem(EDIT_LOG_KEY))||[]}catch(e){return []}}
+function saveEditLog(log){localStorage.setItem(EDIT_LOG_KEY,JSON.stringify(log.slice(0,200)))}
+function recordEdit(original,after){
+  const log=loadEditLog();
+  log.unshift({
+    ticketId: original.id,
+    at: new Date().toISOString(),
+    original: {items:original.items, total:original.total, status:original.status},
+    after:    {items:after.items,    total:after.total,    status:after.status}
+  });
+  saveEditLog(log);
+}
+function clearEditLog(){
+  if(!confirm("Effacer l'historique local des modifications ?")) return;
+  localStorage.removeItem(EDIT_LOG_KEY);
+  renderEditLog();
+  toast('Historique efface');
+}
+function editedTicketIds(){
+  return new Set(loadEditLog().map(e=>e.ticketId));
+}
+
+function renderEditLog(){
+  const card=document.getElementById('edit-log-card');
+  const list=document.getElementById('edit-log-list');
+  if(!card||!list) return;
+  const log=loadEditLog();
+  if(log.length===0){card.style.display='none';return}
+  card.style.display='block';
+  list.innerHTML=log.slice(0,50).map(e=>{
+    const oTotal=(+e.original.total||0).toFixed(3);
+    const nTotal=(+e.after.total||0).toFixed(3);
+    const sameTotal=oTotal===nTotal;
+    const oStat=e.original.status||'new';
+    const nStat=e.after.status||'new';
+    const sameStat=oStat===nStat;
+    return `<div class="edit-log-row">
+      <div class="elr-head">
+        <span class="elr-id">#${e.ticketId} <span class="edited-pill">Modifie</span></span>
+        <span class="elr-when">${formatDateTime(e.at)}</span>
+      </div>
+      <div class="elr-diff">
+        <span>Total: ${sameTotal?nTotal+' TND <span style="color:var(--text-light)">(inchange)</span>':'<span class="elr-orig">'+oTotal+'</span> → <span class="elr-new">'+nTotal+' TND</span>'}</span>
+        <span>Statut: ${sameStat?statusLabel(nStat)+' <span style=\'color:var(--text-light)\'>(inchange)</span>':'<span class="elr-orig">'+statusLabel(oStat)+'</span> → <span class="elr-new">'+statusLabel(nStat)+'</span>'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderSales(){
   // Period view (filtered) — drives the period stats and ticket list
   const tix=filteredTickets||tickets;
-  const totalTND=tix.reduce((s,t)=>s+(t.total||0),0);
+  const totalMil=sumMillimes(tix);
   const count=tix.length;
-  const avgTicket=count>0?totalTND/count:0;
+  const avgMil=count>0?Math.round(totalMil/count):0;
 
-  // Lifetime view — never filtered, drives the "Depuis le début" card
-  const lifetimeTND=tickets.reduce((s,t)=>s+(t.total||0),0);
+  // Lifetime — never filtered
+  const lifetimeMil=sumMillimes(tickets);
   const lifetimeCount=tickets.length;
 
-  // Status breakdown over the period
+  // Status breakdown over the period (millimes)
   const breakdown={new:{c:0,s:0},preparing:{c:0,s:0},done:{c:0,s:0}};
   tix.forEach(t=>{
     const k=t.status||'new';
     if(!breakdown[k]) breakdown[k]={c:0,s:0};
-    breakdown[k].c++; breakdown[k].s+=(t.total||0);
+    breakdown[k].c++; breakdown[k].s+=ticketStoredMillimes(t);
   });
 
   // Period label
@@ -1145,42 +1487,49 @@ function renderSales(){
 
   // Stats grid
   document.getElementById('stats-grid').innerHTML=`
-    <div class="stat-card"><div class="stat-value">${totalTND.toFixed(3)}</div><div class="stat-label">Total periode (TND)</div></div>
+    <div class="stat-card"><div class="stat-value">${fromMillimes(totalMil)}</div><div class="stat-label">Total periode (TND)</div></div>
     <div class="stat-card"><div class="stat-value">${count}</div><div class="stat-label">Tickets periode</div></div>
-    <div class="stat-card"><div class="stat-value">${avgTicket.toFixed(3)}</div><div class="stat-label">Ticket moyen (TND)</div></div>
-    <div class="stat-card lifetime"><div class="stat-value">${lifetimeTND.toFixed(3)}</div><div class="stat-label">Depuis le debut (${lifetimeCount} tickets)</div></div>`;
+    <div class="stat-card"><div class="stat-value">${fromMillimes(avgMil)}</div><div class="stat-label">Ticket moyen (TND)</div></div>
+    <div class="stat-card lifetime"><div class="stat-value">${fromMillimes(lifetimeMil)}</div><div class="stat-label">Depuis le debut (${lifetimeCount} tickets)</div></div>`;
 
   // Breakdown line
   document.getElementById('stats-breakdown').innerHTML=
-    `<span><b>Termines:</b> ${breakdown.done.c} (${breakdown.done.s.toFixed(3)} TND)</span>`+
-    `<span><b>En cours:</b> ${breakdown.preparing.c} (${breakdown.preparing.s.toFixed(3)} TND)</span>`+
-    `<span><b>Nouveaux:</b> ${breakdown.new.c} (${breakdown.new.s.toFixed(3)} TND)</span>`;
+    `<span><b>Termines:</b> ${breakdown.done.c} (${fromMillimes(breakdown.done.s)} TND)</span>`+
+    `<span><b>En cours:</b> ${breakdown.preparing.c} (${fromMillimes(breakdown.preparing.s)} TND)</span>`+
+    `<span><b>Nouveaux:</b> ${breakdown.new.c} (${fromMillimes(breakdown.new.s)} TND)</span>`;
 
-  // Top 10 with revenue + clickable
+  // Best day, comparison, reconciliation, edit log
+  renderBestDay();
+  renderComparison();
+  renderReconciliation();
+  renderEditLog();
+
+  // Top 10 with revenue + clickable (exact millime arithmetic)
   const prodAgg={};
   tix.forEach(t=>(t.items||[]).forEach(it=>{
     if(!it||!it.name) return;
-    const q=it.qty||it.quantity||1;
-    const p=it.price||0;
-    if(!prodAgg[it.name]) prodAgg[it.name]={qty:0,rev:0};
+    const q=+(it.qty||it.quantity||0)||0;
+    const pMil=toMillimes(it.price);
+    if(!prodAgg[it.name]) prodAgg[it.name]={qty:0,revMil:0};
     prodAgg[it.name].qty+=q;
-    prodAgg[it.name].rev+=q*p;
+    prodAgg[it.name].revMil+=q*pMil;
   }));
   const top=Object.entries(prodAgg).sort((a,b)=>b[1].qty-a[1].qty).slice(0,10);
   document.getElementById('top-products').innerHTML=top.length
     ? top.map(([name,a],i)=>`<div class="rank-item clickable" onclick="showProductDetail(${JSON.stringify(name).replace(/"/g,'&quot;')})">
-        <span><span class="rank-num">#${i+1}</span>${name}<span class="rank-rev">${a.rev.toFixed(3)} TND</span></span>
+        <span><span class="rank-num">#${i+1}</span>${name}<span class="rank-rev">${fromMillimes(a.revMil)} TND</span></span>
         <span>${a.qty}</span>
       </div>`).join('')
     : '<p style="color:var(--text-light)">Aucune vente</p>';
 
-  // Ticket summary
+  // Ticket summary (uses period total in millimes)
   document.getElementById('ticket-summary').innerHTML=
-    `<div>${count} ticket${count>1?'s':''} sur la periode | Total: <span>${totalTND.toFixed(3)} TND</span></div>`;
+    `<div>${count} ticket${count>1?'s':''} sur la periode | Total: <span>${fromMillimes(totalMil)} TND</span></div>`;
 
   // Sorted tickets — paginated, no silent slice cap
+  const editedSet=editedTicketIds();
   const sorted=[...tix].sort((a,b)=>{
-    if(ticketSortBy==='total') return ticketSortDir*((a.total||0)-(b.total||0));
+    if(ticketSortBy==='total') return ticketSortDir*(ticketStoredMillimes(a)-ticketStoredMillimes(b));
     const da=getTicketDate(a), db=getTicketDate(b);
     return ticketSortDir*(da>db?1:da<db?-1:0);
   });
@@ -1190,16 +1539,16 @@ function renderSales(){
     const st=t.status||'new';
     const tid=t.id||'';
     const sessionId=t.session_id||t.session||'--';
+    const editedPill=editedSet.has(tid)?'<span class="edited-pill">Modifie</span>':'';
     const itemsHtml=(t.items||[]).map(i=>{
-      const qty=i.qty||i.quantity||1;
-      const price=i.price||0;
-      const lineTotal=(qty*price).toFixed(3);
+      const qty=+(i.qty||i.quantity||0)||0;
+      const lineMil=qty*toMillimes(i.price);
       const modsHtml=formatTicketMods(i.mods);
-      return `<div class="ti-line"><span class="ti-name">${qty}x ${i.name}</span><span class="ti-price">${lineTotal} TND</span></div>${modsHtml?'<div class="ti-mods">'+modsHtml+'</div>':''}`;
+      return `<div class="ti-line"><span class="ti-name">${qty}x ${i.name}</span><span class="ti-price">${fromMillimes(lineMil)} TND</span></div>${modsHtml?'<div class="ti-mods">'+modsHtml+'</div>':''}`;
     }).join('');
     return `<div class="ticket-item">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
-        <span style="font-weight:700;color:var(--accent)">#${tid}</span>
+        <span style="font-weight:700;color:var(--accent)">#${tid}${editedPill}</span>
         <span class="ticket-status ${statusClass(st)}">${statusLabel(st)}</span>
       </div>
       <div class="ticket-meta">
@@ -1208,7 +1557,7 @@ function renderSales(){
       </div>
       <div class="ticket-item-detail">${itemsHtml||'<span style="color:var(--text-light)">--</span>'}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-        <div class="ticket-total">${(t.total||0).toFixed(3)} TND</div>
+        <div class="ticket-total">${fromMillimes(ticketStoredMillimes(t))} TND</div>
         <div class="ticket-actions">
           <button class="btn-edit" onclick="editTicket(${tid})">Modifier</button>
           <button class="btn-del" onclick="confirmDeleteTicket(${tid})">Supprimer</button>
@@ -1235,25 +1584,24 @@ function renderSales(){
   }
 }
 
-// ── Product detail drill-down ──
+// ── Product detail drill-down (exact millime arithmetic) ──
 function showProductDetail(name){
   const tix=filteredTickets||tickets;
-  let qty=0, rev=0;
+  let qty=0, revMil=0;
   const days=new Set();
   const containing=[];
   let firstDate='', lastDate='';
   for(const t of tix){
-    const items=t.items||[];
-    let qInThis=0, revInThis=0;
-    for(const it of items){
+    let qInThis=0, revMilInThis=0;
+    for(const it of (t.items||[])){
       if(it && it.name===name){
-        const q=it.qty||it.quantity||1;
-        const p=it.price||0;
-        qInThis+=q; revInThis+=q*p;
+        const q=+(it.qty||it.quantity||0)||0;
+        const p=toMillimes(it.price);
+        qInThis+=q; revMilInThis+=q*p;
       }
     }
     if(qInThis>0){
-      qty+=qInThis; rev+=revInThis;
+      qty+=qInThis; revMil+=revMilInThis;
       const d=getTicketDate(t);
       const dk=tunisDateKey(d);
       if(dk) days.add(dk);
@@ -1261,10 +1609,10 @@ function showProductDetail(name){
         if(!firstDate||d<firstDate) firstDate=d;
         if(!lastDate||d>lastDate) lastDate=d;
       }
-      containing.push({t, qty:qInThis, rev:revInThis});
+      containing.push({t, qty:qInThis, revMil:revMilInThis});
     }
   }
-  const avgPrice=qty>0?rev/qty:0;
+  const avgPriceMil=qty>0?Math.round(revMil/qty):0;
   const avgPerActiveDay=days.size>0?qty/days.size:0;
   const {label:periodLabel}=getRangeBounds(currentRange);
 
@@ -1272,8 +1620,8 @@ function showProductDetail(name){
   document.getElementById('pd-period').textContent='Periode: '+periodLabel;
   document.getElementById('pd-stats').innerHTML=`
     <div class="pds-card"><div class="pds-value">${qty}</div><div class="pds-label">Quantite vendue</div></div>
-    <div class="pds-card"><div class="pds-value">${rev.toFixed(3)}</div><div class="pds-label">Revenu (TND)</div></div>
-    <div class="pds-card"><div class="pds-value">${avgPrice.toFixed(3)}</div><div class="pds-label">Prix moyen</div></div>
+    <div class="pds-card"><div class="pds-value">${fromMillimes(revMil)}</div><div class="pds-label">Revenu (TND)</div></div>
+    <div class="pds-card"><div class="pds-value">${fromMillimes(avgPriceMil)}</div><div class="pds-label">Prix moyen</div></div>
     <div class="pds-card"><div class="pds-value">${days.size}</div><div class="pds-label">Jours vendus</div></div>
     <div class="pds-card"><div class="pds-value">${avgPerActiveDay.toFixed(1)}</div><div class="pds-label">Moy. / jour actif</div></div>
     <div class="pds-card"><div class="pds-value" style="font-size:.85rem">${firstDate?formatDateTime(firstDate).split(' ')[0]:'--'}<br><span style="font-size:.7rem;color:var(--text-light)">→ ${lastDate?formatDateTime(lastDate).split(' ')[0]:'--'}</span></div><div class="pds-label">Premiere → Derniere</div></div>`;
@@ -1286,7 +1634,7 @@ function showProductDetail(name){
   document.getElementById('pd-tickets').innerHTML=recent.length
     ? recent.map(r=>`<div class="pd-ticket-row">
         <span><span style="color:var(--accent);font-weight:700">#${r.t.id||''}</span> <span class="pd-date">${formatDateTime(getTicketDate(r.t))}</span></span>
-        <span><span class="pd-qty">${r.qty}x</span> <span style="color:var(--text-light)">·</span> ${r.rev.toFixed(3)} TND</span>
+        <span><span class="pd-qty">${r.qty}x</span> <span style="color:var(--text-light)">·</span> ${fromMillimes(r.revMil)} TND</span>
       </div>`).join('')
     : '<p style="color:var(--text-light);padding:10px 0">Aucun ticket</p>';
 
@@ -1467,9 +1815,17 @@ async function saveEditedTicket(){
     item.quantity=item.qty;
   });
   recalcEditTotal();
-  // Update in tickets array
+  // Snapshot original BEFORE applying changes (audit trail, local-only)
   const idx=tickets.findIndex(t=>t.id===ticketId);
   if(idx>=0){
+    const before=tickets[idx];
+    const after={items:editTicketData.items,total:editTicketData.total,status:editTicketData.status};
+    const changed = (toMillimes(before.total)!==toMillimes(after.total))
+      || ((before.status||'new')!==(after.status||'new'))
+      || JSON.stringify(before.items||[])!==JSON.stringify(after.items||[]);
+    if(changed){
+      recordEdit({id:ticketId,items:before.items,total:before.total,status:before.status},{id:ticketId,...after});
+    }
     tickets[idx].items=editTicketData.items;
     tickets[idx].total=editTicketData.total;
     tickets[idx].status=editTicketData.status;
