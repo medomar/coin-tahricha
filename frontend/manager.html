@@ -146,6 +146,16 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .pd-insight{font-size:.72rem;color:var(--text-light);margin-top:4px;padding:4px 8px;background:var(--bg);border-radius:6px}
 .pd-insight b{color:var(--text)}
 .pd-no-data{color:var(--text-light);font-size:.78rem;font-style:italic;padding:6px 0}
+.pd-collapsible{margin:8px 0;border:1px solid var(--border);border-radius:8px;background:var(--card);overflow:hidden}
+.pd-collapsible summary{cursor:pointer;padding:11px 12px;font-size:.85rem;font-weight:600;color:var(--text);display:flex;justify-content:space-between;align-items:center;gap:8px;list-style:none;flex-wrap:wrap;user-select:none;background:#fafafa}
+.pd-collapsible summary::-webkit-details-marker{display:none}
+.pd-collapsible summary::after{content:'▾';color:var(--accent);font-weight:700;transition:transform .15s;flex-shrink:0;margin-left:auto}
+.pd-collapsible[open] summary::after{transform:rotate(180deg)}
+.pd-collapsible .pd-coll-title{font-weight:700}
+.pd-collapsible .pd-coll-summary{font-size:.72rem;color:var(--text-light);font-weight:500}
+.pd-collapsible .pd-coll-body{padding:10px 12px}
+.pd-horizon-chips{margin-bottom:8px}
+.pd-horizon-chips .chip{padding:5px 12px;font-size:.72rem;font-weight:600}
 .compare-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap}
 .compare-row:last-child{border:none}
 .compare-row .cmp-label{font-size:.85rem;font-weight:600;color:var(--text)}
@@ -268,6 +278,10 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
 .subtab-btn.active .subtab-badge{background:#fff;color:var(--accent)}
 .subtab-content{display:none}
 .subtab-content.active{display:block}
+.top-controls{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.top-controls select{flex:0 0 auto;width:auto;min-width:140px;margin:0;padding:8px 10px}
+.top-controls input{flex:1;min-width:140px;margin:0}
+.top-info{font-size:.72rem;color:var(--text-light);margin-bottom:6px}
 
 /* Responsive */
 @media(max-width:480px){
@@ -279,7 +293,8 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
   .stat-label{font-size:.65rem;line-height:1.2}
   .stat-card.lifetime .stat-label{font-size:.62rem}
   .stats-breakdown{font-size:.7rem;gap:8px;padding:4px 0;margin-bottom:10px}
-  .subtab-btn{font-size:.72rem;padding:9px 8px;min-width:78px}
+  .subtab-nav{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px}
+  .subtab-btn{font-size:.78rem;padding:11px 8px;min-width:0;flex:none}
   .card{padding:12px}
   .card h3{font-size:.95rem}
   .chip{padding:6px 12px;font-size:.74rem}
@@ -420,7 +435,17 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
   <!-- Sub-view: Produits -->
   <div class="subtab-content" id="subtab-products">
     <div class="card">
-      <h3>Top 10 Produits <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(cliquer pour details)</span></h3>
+      <h3>Produits vendus <span style="font-weight:400;font-size:.72rem;color:var(--text-light)">(cliquer pour details)</span></h3>
+      <div class="top-controls">
+        <select id="top-limit" onchange="setTopLimit(this.value)">
+          <option value="10">Top 10</option>
+          <option value="25">Top 25</option>
+          <option value="50">Top 50</option>
+          <option value="all">Tout afficher</option>
+        </select>
+        <input type="text" id="top-search" placeholder="Rechercher un produit..." oninput="setTopSearch(this.value)">
+      </div>
+      <div id="top-products-info" class="top-info"></div>
       <div id="top-products"></div>
     </div>
   </div>
@@ -616,31 +641,60 @@ input:focus,select:focus{outline:none;border-color:var(--accent)}
     </div>
     <div class="product-detail-stats" id="pd-stats"></div>
 
-    <div class="pd-section">
-      <h4>Repartition par heure <span class="pd-h-info" id="pd-hour-info"></span></h4>
-      <div id="pd-by-hour"></div>
-      <div class="pd-insight" id="pd-hour-insight" style="display:none"></div>
-    </div>
-
-    <div class="pd-section">
-      <h4>Repartition par jour de la semaine <span class="pd-h-info" id="pd-dow-info"></span></h4>
-      <div id="pd-by-dow"></div>
-      <div class="pd-insight" id="pd-dow-insight" style="display:none"></div>
-    </div>
-
+    <!-- Trend (always visible — small) -->
     <div class="pd-section">
       <h4>Tendance — 14 derniers jours <span class="pd-h-info" id="pd-trend-info"></span></h4>
       <div class="pd-trend-grid" id="pd-trend"></div>
       <div class="pd-trend-axis"><span>il y a 13j</span><span>aujourd'hui</span></div>
     </div>
 
+    <!-- Forecast (always visible — bottom-line answer with horizon picker) -->
     <div class="pd-section">
-      <h4>Estimation pour les 7 prochains jours</h4>
+      <h4>Estimation</h4>
+      <div class="quick-chips pd-horizon-chips" id="pd-horizon-chips">
+        <button class="chip" data-horizon="1">Demain</button>
+        <button class="chip" data-horizon="3">3 jours</button>
+        <button class="chip active" data-horizon="7">7 jours</button>
+        <button class="chip" data-horizon="14">14 jours</button>
+        <button class="chip" data-horizon="30">30 jours</button>
+      </div>
       <div class="pd-forecast" id="pd-forecast"></div>
     </div>
 
-    <h4 style="font-size:.85rem;margin:14px 0 6px;color:var(--text)">Derniers tickets</h4>
-    <div id="pd-tickets" style="max-height:240px;overflow-y:auto"></div>
+    <!-- Hour distribution (collapsible — closed by default; summary shows the peak) -->
+    <details class="pd-collapsible">
+      <summary>
+        <span class="pd-coll-title">Repartition par heure</span>
+        <span class="pd-coll-summary" id="pd-hour-summary"></span>
+      </summary>
+      <div class="pd-coll-body">
+        <div id="pd-by-hour"></div>
+        <div class="pd-insight" id="pd-hour-insight" style="display:none"></div>
+      </div>
+    </details>
+
+    <!-- Day-of-week distribution (collapsible) -->
+    <details class="pd-collapsible">
+      <summary>
+        <span class="pd-coll-title">Repartition par jour</span>
+        <span class="pd-coll-summary" id="pd-dow-summary"></span>
+      </summary>
+      <div class="pd-coll-body">
+        <div id="pd-by-dow"></div>
+        <div class="pd-insight" id="pd-dow-insight" style="display:none"></div>
+      </div>
+    </details>
+
+    <!-- Recent tickets (collapsible) -->
+    <details class="pd-collapsible">
+      <summary>
+        <span class="pd-coll-title">Derniers tickets</span>
+        <span class="pd-coll-summary" id="pd-tickets-summary"></span>
+      </summary>
+      <div class="pd-coll-body">
+        <div id="pd-tickets" style="max-height:240px;overflow-y:auto"></div>
+      </div>
+    </details>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeModal('modal-product-detail')">Fermer</button>
     </div>
@@ -1325,6 +1379,56 @@ function loadMoreTickets(){
   renderSales();
 }
 
+// ── Top products: configurable count + search ──
+let topProductsLimit='10';   // '10' | '25' | '50' | 'all'
+let topProductsSearch='';
+
+function setTopLimit(v){
+  topProductsLimit=v;
+  // Re-render only the top products section using the active filter
+  renderTopProducts(filteredTickets||tickets);
+}
+function setTopSearch(v){
+  topProductsSearch=(v||'').toLowerCase().trim();
+  renderTopProducts(filteredTickets||tickets);
+}
+
+function renderTopProducts(tix){
+  const root=document.getElementById('top-products');
+  const info=document.getElementById('top-products-info');
+  if(!root) return;
+  // Aggregate (qty + revenue in millimes)
+  const agg={};
+  tix.forEach(t=>(t.items||[]).forEach(it=>{
+    if(!it||!it.name) return;
+    const q=+(it.qty||it.quantity||0)||0;
+    const pMil=toMillimes(it.price);
+    if(!agg[it.name]) agg[it.name]={qty:0,revMil:0};
+    agg[it.name].qty+=q;
+    agg[it.name].revMil+=q*pMil;
+  }));
+  let entries=Object.entries(agg).sort((a,b)=>b[1].qty-a[1].qty);
+  const totalCount=entries.length;
+  if(topProductsSearch){
+    entries=entries.filter(([name])=>name.toLowerCase().includes(topProductsSearch));
+  }
+  const matchedCount=entries.length;
+  const limit=topProductsLimit==='all'?Infinity:parseInt(topProductsLimit,10)||10;
+  const sliced=entries.slice(0,limit);
+
+  if(info){
+    if(totalCount===0) info.textContent='';
+    else if(topProductsSearch) info.textContent=`${matchedCount} produit${matchedCount>1?'s':''} correspondent · ${sliced.length} affiche${sliced.length>1?'s':''}`;
+    else info.textContent=`${sliced.length} sur ${totalCount} produits vendus sur la periode`;
+  }
+  root.innerHTML=sliced.length
+    ? sliced.map(([name,a],i)=>`<div class="rank-item clickable" onclick="showProductDetail(${JSON.stringify(name).replace(/"/g,'&quot;')})">
+        <span><span class="rank-num">#${i+1}</span>${name}<span class="rank-rev">${fromMillimes(a.revMil)} TND</span></span>
+        <span>${a.qty}</span>
+      </div>`).join('')
+    : '<p style="color:var(--text-light);padding:8px 0">'+(topProductsSearch?'Aucun produit ne correspond':'Aucune vente')+'</p>';
+}
+
 // ── Money in millimes (1 TND = 1000 millimes) — exact integer arithmetic ──
 function toMillimes(v){return Math.round((+v||0)*1000)}
 function fromMillimes(m){return (m/1000).toFixed(3)}
@@ -1812,23 +1916,8 @@ function renderSales(){
   renderReconciliation();
   renderEditLog();
 
-  // Top 10 with revenue + clickable (exact millime arithmetic)
-  const prodAgg={};
-  tix.forEach(t=>(t.items||[]).forEach(it=>{
-    if(!it||!it.name) return;
-    const q=+(it.qty||it.quantity||0)||0;
-    const pMil=toMillimes(it.price);
-    if(!prodAgg[it.name]) prodAgg[it.name]={qty:0,revMil:0};
-    prodAgg[it.name].qty+=q;
-    prodAgg[it.name].revMil+=q*pMil;
-  }));
-  const top=Object.entries(prodAgg).sort((a,b)=>b[1].qty-a[1].qty).slice(0,10);
-  document.getElementById('top-products').innerHTML=top.length
-    ? top.map(([name,a],i)=>`<div class="rank-item clickable" onclick="showProductDetail(${JSON.stringify(name).replace(/"/g,'&quot;')})">
-        <span><span class="rank-num">#${i+1}</span>${name}<span class="rank-rev">${fromMillimes(a.revMil)} TND</span></span>
-        <span>${a.qty}</span>
-      </div>`).join('')
-    : '<p style="color:var(--text-light)">Aucune vente</p>';
+  // Aggregate products for the period; top-of-list limit + search are user-controlled
+  renderTopProducts(tix);
 
   // Ticket summary (uses period total in millimes)
   document.getElementById('ticket-summary').innerHTML=
@@ -1948,12 +2037,24 @@ function showProductDetail(name){
     if(dk) byDate[dk]=(byDate[dk]||0)+c.qty;
   }
 
-  // Render hour bars
+  // ── Hour bars + closed-state summary ──
   const hourMax=Math.max(1,...byHour);
   const hourTotal=byHour.reduce((s,v)=>s+v,0);
   const hourPeak=byHour.indexOf(hourMax);
   const peakHourPct=hourTotal>0?Math.round((hourMax/hourTotal)*100):0;
-  document.getElementById('pd-hour-info').textContent=hourTotal>0?(hourTotal+' ventes localisees'):'';
+  let hourSummary='';
+  let bestWindowStart=hourPeak, bestWindowSum=0, winPct=0;
+  if(hourTotal>0){
+    for(let s=0;s<24;s++){
+      const sum=byHour[s]+byHour[(s+1)%24]+byHour[(s+2)%24];
+      if(sum>bestWindowSum){bestWindowSum=sum;bestWindowStart=s}
+    }
+    winPct=Math.round((bestWindowSum/hourTotal)*100);
+    hourSummary='Pic '+String(bestWindowStart).padStart(2,'0')+'h-'+String((bestWindowStart+3)%24).padStart(2,'0')+'h ('+winPct+'%)';
+  } else {
+    hourSummary='aucune donnee';
+  }
+  document.getElementById('pd-hour-summary').textContent=hourSummary;
   document.getElementById('pd-by-hour').innerHTML=hourTotal>0
     ? byHour.map((v,h)=>{
         const pct=hourMax>0?(v/hourMax)*100:0;
@@ -1967,22 +2068,15 @@ function showProductDetail(name){
     : '<div class="pd-no-data">Aucune donnee horaire pour cette periode</div>';
   const hourInsightEl=document.getElementById('pd-hour-insight');
   if(hourTotal>0 && peakHourPct>15){
-    // Find a peak window of 3 contiguous hours with highest sum
-    let bestStart=hourPeak, bestSum=0;
-    for(let s=0;s<24;s++){
-      const sum=byHour[s]+byHour[(s+1)%24]+byHour[(s+2)%24];
-      if(sum>bestSum){bestSum=sum;bestStart=s}
-    }
-    const winPct=Math.round((bestSum/hourTotal)*100);
     hourInsightEl.style.display='block';
-    hourInsightEl.innerHTML=`<b>Pic de ventes:</b> ${String(bestStart).padStart(2,'0')}h-${String((bestStart+3)%24).padStart(2,'0')}h (${winPct}% des ventes)`;
+    hourInsightEl.innerHTML=`<b>Pic de ventes:</b> ${String(bestWindowStart).padStart(2,'0')}h-${String((bestWindowStart+3)%24).padStart(2,'0')}h (${winPct}% des ventes)`;
   } else { hourInsightEl.style.display='none' }
 
-  // Render day-of-week bars
+  // ── Day-of-week bars + closed-state summary ──
   const dowMax=Math.max(1,...byDow);
   const dowTotal=byDow.reduce((s,v)=>s+v,0);
   const dowPeak=byDow.indexOf(dowMax);
-  document.getElementById('pd-dow-info').textContent=dowTotal>0?(dowTotal+' ventes localisees'):'';
+  document.getElementById('pd-dow-summary').textContent=dowTotal>0?('Plus vendu: '+DOW_LABELS[dowPeak]):'aucune donnee';
   document.getElementById('pd-by-dow').innerHTML=dowTotal>0
     ? byDow.map((v,i)=>{
         const pct=dowMax>0?(v/dowMax)*100:0;
@@ -2009,66 +2103,55 @@ function showProductDetail(name){
     dowInsightEl.innerHTML=txt;
   } else { dowInsightEl.style.display='none' }
 
-  // ── 14-day trend + 7-day forecast — independent of period filter (uses raw `tickets`) ──
-  // We want the trend of "actual recent activity" no matter what's filtered.
-  const recentByDate={};
+  // ── 14-day trend chart + 60-day series for forecast (independent of period filter) ──
   const todayKey=tunisDateKey(new Date());
-  // Build set of last 14 day keys
-  const last14=[];
-  for(let i=13;i>=0;i--) last14.push(ymdAddDays(todayKey,-i));
+  // Build a 60-day map from 'tickets' — covers any horizon up to 30 days with prior-period comparison
+  const recentByDate={};
   for(const t of tickets){
-    const ts=getTicketDate(t);
-    const dk=tunisDateKey(ts);
+    const dk=tunisDateKey(getTicketDate(t));
     if(!dk) continue;
-    if(last14.indexOf(dk)<0) continue;
     let q=0;
     for(const it of (t.items||[])){
       if(it && it.name===name) q+=+(it.qty||it.quantity||0)||0;
     }
     if(q>0) recentByDate[dk]=(recentByDate[dk]||0)+q;
   }
-  const trendValues=last14.map(k=>recentByDate[k]||0);
+  // Helper: build N-day series ending today (oldest first)
+  function seriesEndingToday(days){
+    const arr=[];
+    for(let i=days-1;i>=0;i--) arr.push(recentByDate[ymdAddDays(todayKey,-i)]||0);
+    return arr;
+  }
+  // Trend chart = 14 days
+  const trendValues=seriesEndingToday(14);
   const trendMax=Math.max(1,...trendValues);
   const trendTotal=trendValues.reduce((s,v)=>s+v,0);
   document.getElementById('pd-trend-info').textContent=trendTotal>0?(trendTotal+' unites en 14j'):'aucune vente recente';
+  const trendDates=[];
+  for(let i=13;i>=0;i--) trendDates.push(ymdAddDays(todayKey,-i));
   document.getElementById('pd-trend').innerHTML=trendValues.map((v,i)=>{
     const pct=v>0?Math.max(6,(v/trendMax)*100):0;
     const cls=v===0?'empty':'';
-    const dk=last14[i];
-    const [yy,mm,dd]=dk.split('-');
+    const [yy,mm,dd]=trendDates[i].split('-');
     return `<div class="pd-trend-bar ${cls}" style="height:${pct}%" title="${dd}/${mm}: ${v}"></div>`;
   }).join('');
 
-  // Forecast: average qty per day over the last 7 days × 7
-  const last7=trendValues.slice(7);
-  const last7Total=last7.reduce((s,v)=>s+v,0);
-  const avg7=last7Total/7;
-  const projected=Math.round(avg7*7);
-  const prevWeek=trendValues.slice(0,7).reduce((s,v)=>s+v,0);
-  let trendSignal='';
-  if(prevWeek===0 && last7Total===0) trendSignal='aucune vente sur 14 jours';
-  else if(prevWeek===0) trendSignal='nouvelle activite cette semaine';
-  else {
-    const change=Math.round(((last7Total-prevWeek)/prevWeek)*100);
-    if(change>10) trendSignal='en progression (+'+change+'% vs semaine precedente)';
-    else if(change<-10) trendSignal='en baisse ('+change+'% vs semaine precedente)';
-    else trendSignal='stable vs semaine precedente';
-  }
-  document.getElementById('pd-forecast').innerHTML=`
-    <div>
-      <div class="pdf-label">Estimation 7 prochains jours</div>
-      <div class="pdf-sub">Base sur la moyenne des 7 derniers jours (${avg7.toFixed(1)}/jour) — ${trendSignal}</div>
-    </div>
-    <div style="text-align:right">
-      <div class="pdf-value">~ ${projected}</div>
-      <div class="pdf-sub">unites attendues</div>
-    </div>`;
+  // Cache state used by recomputeForecast (chip click)
+  pdState={name, todayKey};
 
+  // Default horizon = 7. Reset chips' active state in case the user changed it on a previous open.
+  document.querySelectorAll('#pd-horizon-chips .chip').forEach(c=>{
+    c.classList.toggle('active',c.dataset.horizon==='7');
+  });
+  recomputeForecast(7);
+
+  // Recent tickets list + closed-state summary
   containing.sort((a,b)=>{
     const da=getTicketDate(a.t), db=getTicketDate(b.t);
     return da>db?-1:da<db?1:0;
   });
   const recent=containing.slice(0,10);
+  document.getElementById('pd-tickets-summary').textContent=containing.length>0?(containing.length+' tickets · '+(recent.length<containing.length?'10 derniers':'tous')):'';
   document.getElementById('pd-tickets').innerHTML=recent.length
     ? recent.map(r=>`<div class="pd-ticket-row">
         <span><span style="color:var(--accent);font-weight:700">#${r.t.id||''}</span> <span class="pd-date">${formatDateTime(getTicketDate(r.t))}</span></span>
@@ -2078,6 +2161,64 @@ function showProductDetail(name){
 
   document.getElementById('modal-product-detail').classList.remove('hidden');
 }
+
+// State + helpers for the forecast chips inside the product modal
+let pdState=null;
+function recomputeForecast(horizon){
+  if(!pdState) return;
+  const days=Math.max(1,Math.min(30,horizon|0));
+  // Baseline window grows with horizon: ≤7d uses 7-day avg; ≤14d uses 14-day avg; ≤30d uses 30-day avg
+  const baseline=days<=7?7:days<=14?14:30;
+  // Compute series freshly from tickets (so the modal reflects any updates)
+  const recent={};
+  for(const t of tickets){
+    const dk=tunisDateKey(getTicketDate(t));
+    if(!dk) continue;
+    let q=0;
+    for(const it of (t.items||[])){
+      if(it && it.name===pdState.name) q+=+(it.qty||it.quantity||0)||0;
+    }
+    if(q>0) recent[dk]=(recent[dk]||0)+q;
+  }
+  function avgWindow(daysBack, offset){
+    let s=0;
+    for(let i=0;i<daysBack;i++) s+=recent[ymdAddDays(pdState.todayKey,-(i+offset))]||0;
+    return s/daysBack;
+  }
+  const avgRecent=avgWindow(baseline,0);
+  const avgPrev=avgWindow(baseline,baseline);
+  const projected=Math.round(avgRecent*days);
+  let signal='';
+  if(avgPrev===0 && avgRecent===0) signal='aucune vente sur les '+(2*baseline)+' derniers jours';
+  else if(avgPrev===0) signal='nouvelle activite';
+  else {
+    const change=Math.round(((avgRecent-avgPrev)/avgPrev)*100);
+    if(change>10) signal='en progression (+'+change+'% vs '+baseline+'j precedents)';
+    else if(change<-10) signal='en baisse ('+change+'% vs '+baseline+'j precedents)';
+    else signal='stable vs '+baseline+'j precedents';
+  }
+  const horizonLabel = days===1?'demain':(days+' prochains jours');
+  document.getElementById('pd-forecast').innerHTML=`
+    <div>
+      <div class="pdf-label">Estimation ${horizonLabel}</div>
+      <div class="pdf-sub">Base sur la moyenne des ${baseline} derniers jours (${avgRecent.toFixed(1)}/jour) — ${signal}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="pdf-value">~ ${projected}</div>
+      <div class="pdf-sub">unite${projected!==1?'s':''} attendue${projected!==1?'s':''}</div>
+    </div>`;
+}
+// Wire the horizon chips once
+(function bindHorizonChips(){
+  const root=document.getElementById('pd-horizon-chips');
+  if(!root) return;
+  root.querySelectorAll('.chip').forEach(b=>{
+    b.addEventListener('click',()=>{
+      root.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c===b));
+      recomputeForecast(parseInt(b.dataset.horizon,10));
+    });
+  });
+})();
 
 // ===== Ticket CRUD =====
 function confirmDeleteTicket(ticketId){
